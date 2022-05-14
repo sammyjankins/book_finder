@@ -28,6 +28,7 @@ ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
     os.environ.get("CURRENT_HOST"),
+    '51.250.72.255',
 ]
 
 # Application definition
