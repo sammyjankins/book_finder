@@ -1,0 +1,66 @@
+{% extends "catalog/base.html" %}
+{% block content %}
+
+    <div class="card text-center">
+        <div class="card-body">
+
+
+            <div class="d-flex justify-content-between">
+                <div><h3 class="card-title">Шкаф: <a class="text-decoration-none text-dark"
+                                                     href="{% url 'bookcase-detail' object.bookcase.id %}">{{ object.bookcase|lower }}</a>
+                </h3>
+                    <h4 class="card-title">{{ object.title }}, {{ object.row|lower }} ряд</h4>
+                    {% if object.is_current %}
+                        <h4 class="card-title text-info">Активна</h4>
+                    {% else %}
+                        <h5><a class="btn btn-outline-info" href="{% url 'new-active-shelf' object.pk %}">
+                            Сделать активной</a></h5>
+                    {% endif %}
+                </div>
+
+                <span>
+                    <a href="{% url 'shelf-update' shelf.id %}"
+                       class="btn btn-outline-dark"
+                       role="button">Изменить</a>
+                </span>
+            </div>
+
+            <div class="card-text">
+
+                <h5>Книги:</h5>
+
+                {% regroup shelf.book_set.all|dictsortreversed:"read"  by id as book_list %}
+                <div class="list-group">
+
+                    {% for books in book_list %}
+                        {% for book in books.list %}
+
+                            <a class="list-group-item {% if book.favorite %}list-group-item-success{% endif %}"
+                               href="{% url 'book-detail' pk=book.id %}">
+                                {% if book.read %}<b>{% endif %}
+
+                                {{ book.author }} - {{ book.title }}
+                                {% if book.year_of_publication %}
+                                    ({{ book.year_of_publication }})
+                                {% endif %}
+                                {% if book.pages %}
+                                    - {{ book.pages }} страниц
+                                {% endif %}
+                                {% if book.read %}</b>{% endif %}
+
+                            </a>
+                        {% endfor %}
+                    {% endfor %}
+                    <a class="list-group-item list-group-item-action list-group-item-light"
+                       href="{% url 'book-create' %}">Добавить новую книгу</a>
+
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+
+{% endblock content %}

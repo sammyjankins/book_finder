@@ -1,0 +1,23 @@
+{% extends "catalog/base.html" %}
+{% block content %}
+
+    <div class="card px-4 py-4">
+
+        <div class="container">
+            <form method="POST">
+                {% csrf_token %}
+                <fieldset class="form-group">
+                    <legend class="border-bottom mb-4">Удаление шкафа</legend>
+                    <h2>Шкаф будет удален включая его содержимое. Вы уверены, что хотите удалить шкаф
+                        "{{ bookcase.title }}"?</h2>
+                </fieldset>
+                <div class="form-group mt-3">
+                    <input class="btn btn-outline-danger" type="submit" value="Подтвердить">
+                    <a class="btn btn-outline-secondary" href="{% url 'bookcase-detail' bookcase.id %}">Вернуться на страницу шкафа</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+{% endblock content %}

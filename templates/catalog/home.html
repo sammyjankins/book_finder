@@ -1,0 +1,39 @@
+{% extends "catalog/base.html" %}
+{% block content %}
+
+    <div class="card text-center">
+        <div class="card-body">
+            <div class="float-start d-none d-md-block">
+                <h2 class="account-heading">{{ user.username }}</h2>
+                <a class="nav-link" href="{% url 'profile' %}">
+                    <img class="rounded-circle  account-img img-thumbnail" src="{{ user.profile.image.url }}"></a>
+            </div>
+
+
+            <h1 class="card-title">Ваша библиотека</h1>
+
+            <div class="card-text">
+                <div class="list-group text-center" id="bookcases">
+
+                    {% for bookcase in results %}
+
+                        <a class="list-group-item list-group-item-action"
+                           href="{% url 'bookcase-detail' bookcase.id %}">
+                            {{ bookcase.title }} - {{ bookcase.book_set.all|length }} книг
+                        </a>
+                    {% endfor %}
+
+                    <a class="list-group-item list-group-item-action list-group-item-light"
+                       href="{% url 'bookcase-create' %}" id="add-bookcase">Добавить новый книжный шкаф</a>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+
+
+
+
+{% endblock content %}

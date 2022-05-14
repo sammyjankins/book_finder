@@ -1,0 +1,23 @@
+{% extends "catalog/base.html" %}
+{% block content %}
+
+    <div class="card px-4 py-4">
+
+        <div class="container">
+            <form method="POST">
+                {% csrf_token %}
+                <fieldset class="form-group">
+                    <legend class="border-bottom mb-4">Удаление автора</legend>
+                    <h2>Вместе с автором будут удалены его книги. Вы уверены, что хотите удалить автора
+                        "{{ author.name }}"?</h2>
+                </fieldset>
+                <div class="form-group mt-3">
+                    <input class="btn btn-outline-danger" type="submit" value="Подтвердить">
+                    <a class="btn btn-outline-secondary" href="{% url 'author-detail' author.id %}">Вернуться на страницу автора</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+{% endblock content %}

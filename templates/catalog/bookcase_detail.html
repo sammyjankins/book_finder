@@ -1,0 +1,46 @@
+{% extends "catalog/base.html" %}
+{% block content %}
+    <div class="card text-center">
+        <div class="card-body">
+
+
+            <div class="d-flex justify-content-between">
+                <span>
+                    <a href="{% url 'bookcase-update' bookcase.id %}"
+                       class="btn btn-outline-dark"
+                       role="button">Изменить</a>
+                </span>
+
+                <h3 class="card-title">Шкаф: {{ object.title }}</h3>
+
+                <span>
+                    <a href="{% url 'bookcase-delete' bookcase.id %}"
+                       class="btn btn-outline-danger"
+                       role="button">Удалить</a>
+                </span>
+            </div>
+            <div class="card-text">
+
+                <h5>Полки:</h5>
+
+                {% regroup bookcase.shelves.all|dictsort:"id"  by id as shelve_list %}
+                <div class="list-group">
+
+                    {% for shelve in shelve_list %}
+                        {% for shelf in shelve.list %}
+
+                            <a class="list-group-item list-group-item-action
+                                {% if shelf.is_current %}list-group-item-info{% endif %}"
+                               href="{% url 'shelf-detail' shelf.id %}">
+                                {{ shelf.title }}, {{ shelf.row|lower }} ряд - {{ shelf.book_set.all|length }} книг
+                            </a>
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+
+{% endblock content %}

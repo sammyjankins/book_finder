@@ -1,0 +1,134 @@
+{% extends "catalog/base.html" %}
+{% block content %}
+    <div class="card text-center">
+        <div class="card-body">
+
+
+            <div class="d-flex justify-content-between">
+                <span>
+                    <a href="{% url "book-update" object.id %}" class="btn btn-outline-dark" role="button">Изменить</a>
+                </span>
+
+                <h3 class="card-title">
+                    {{ object.title }}
+                    {% if object.read %}
+                        <span class="text-success">✓</span>
+                    {% endif %}
+                    {% if object.favorite %}
+                        <span class="text-warning">★</span>
+                    {% endif %}
+                </h3>
+
+                <span>
+                    <a href="{% url "book-delete" object.id %}"
+                       class="btn btn-outline-danger"
+                       role="button">Удалить</a>
+                </span>
+            </div>
+            <h5>{{ object.bookcase }}, {{ object.shelf }}</h5>
+            <div class="mt-3 container">
+
+                <div class="row row-cols-1  row-cols-md-2">
+
+                    <div class="col">
+                        {% if object.favorite %}
+                            <h5><a class="btn btn-outline-secondary"
+                                   href="{% url 'swap-favorite' object.pk %}">Убрать из избранного</a></h5>
+                        {% else %}
+                            <h5><a class="btn btn-outline-warning" href="{% url 'swap-favorite' object.pk %}">
+                                Добавить в избранное</a></h5>
+                        {% endif %}
+
+                        {% if object.read %}
+                            <h5><a class="btn btn-outline-secondary"
+                                   href="{% url 'swap-read' object.pk %}">Убрать из прочитанного</a></h5>
+                        {% else %}
+                            <h5><a class="btn btn-outline-success" href="{% url 'swap-read' object.pk %}">
+                                Добавить в прочитанное</a></h5>
+                        {% endif %}
+
+                        {% if object.author %}<h5>Автор: {{ object.author }}</h5>{% endif %}
+                        {% if object.ISBN %}<h5>ISBN: {{ object.ISBN }}</h5>{% endif %}
+                        {% if object.pages %}<h5>Страниц: {{ object.pages }}</h5>{% endif %}
+                        {% if object.language %}<h5>Язык: {{ object.language }}</h5>{% endif %}
+                        {% if object.year_of_publication %}
+                            <h5>Год публикации: {{ object.year_of_publication }}</h5>{% endif %}
+                        {% if object.type_of_cover %}<h5>Тип обложки: {{ object.type_of_cover }}</h5>{% endif %}
+                        {% if object.annotation %}
+                            <a href="#" class="list-group-item list-group-item-action">
+                                <div class="d-flex w-100">
+                                    <h5 class="mb-1">Аннотация</h5>
+                                </div>
+                                <p class="mb-1">{{ object.annotation }}</p>
+                            </a>
+                        {% endif %}
+                    </div>
+
+                    <div class="col">
+                        <div class="list-group">
+                            {% if object.note_set %}
+
+                                {% for note in object.note_set.all %}
+                                    <div class="list-group-item list-group-item-action  px-0 pb-0">
+                                        <div class="d-flex w-100">
+                                            <b class="my-2 mx-2 ">Заметка - {{ forloop.counter }}</b>
+                                        </div>
+
+
+                                        <div id="new_note" class="input-group">
+                                            <form id="update-form{{ note.id }}" method="POST"
+                                                  action="{% url "note-update" note.id %}">
+                                                {% csrf_token %}
+                                            </form>
+                                            <form id="delete-form{{ note.id }}" method="POST"
+                                                  action="{% url 'note-delete' note.id %}">
+                                                {% csrf_token %}
+                                            </form>
+
+                                            <div class="btn-group-vertical m-0">
+
+                                                <input class="btn btn-outline-secondary" id="button-addon{{ note.id }}"
+                                                       type="submit" value="Изменить" form="update-form{{ note.id }}">
+
+                                                <input class="btn btn-outline-secondary" type="submit"
+                                                       value="Удалить" form="delete-form{{ note.id }}">
+
+
+                                            </div>
+                                            <textarea class="form-control" placeholder="Новая заметка"
+                                                      aria-describedby="button-addon{{ note.id }}"
+                                                      name="text"
+                                                      form="update-form{{ note.id }}">{{ note.text }}</textarea>
+
+                                        </div>
+                                    </div>
+
+
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                        <form method="POST" action="{% url 'note-create' object.pk %}">
+                            {% csrf_token %}
+
+                            <div id="new_note" class="input-group mb-3">
+
+                                <input id="button-addon2" class="btn btn-outline-secondary" type="submit"
+                                       value="Добавить">
+                                <input type='hidden' name="book" value="{{ book.id }}"/>
+                                <textarea class="form-control" placeholder="Новая заметка"
+                                          aria-describedby="button-addon2"
+                                          name="text"></textarea>
+
+                            </div>
+                        </form>
+
+                    </div>
+                </div>
+            </div>
+
+
+        </div>
+    </div>
+
+
+{% endblock content %}

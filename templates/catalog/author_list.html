@@ -1,0 +1,32 @@
+{% extends "catalog/base.html" %}
+{% block content %}
+
+    <div class="card text-center">
+        <div class="card-body">
+
+            <h1 class="card-title">Ваши авторы</h1>
+
+            <div class="card-text">
+                <div class="list-group text-center">
+
+                    {% for author in authors %}
+                        <a class="list-group-item list-group-item-action"
+                           href="{% url 'author-detail' author.id %}">
+                            {{ author.name }} - {{ author.book_set.all|length }} книг
+                        </a>
+                    {% endfor %}
+
+                    <a class="list-group-item list-group-item-action list-group-item-light"
+                       href="{% url 'author-create' %}">Добавить нового</a>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+
+
+
+
+{% endblock content %}

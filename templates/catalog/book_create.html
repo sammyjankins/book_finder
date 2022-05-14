@@ -1,0 +1,234 @@
+{% extends "catalog/base.html" %}
+{% load crispy_forms_tags %}
+{% block content %}
+
+    <div class="card px-4 py-4">
+
+        {% if errors %}
+            <div class="list-group my-3">
+                <li class="list-group-item list-group-item-danger">
+                    <b>Ошибки:</b>
+                </li>
+                {% for error_field, error_message in errors.items %}
+                    <li class="list-group-item list-group-item-danger">
+                        {{ error_field|striptags }} - {{ error_message|striptags }}
+                    </li>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+
+        <div class="container">
+            <h3>Книга</h3>
+            <form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <br>
+                <h4>Заполните данные автоматически с помощью онлайн поиска</h4>
+                <label for="ISBNp_input">Введите название книги или номер ISBN</label>
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" placeholder="Введите данные"
+                           aria-label="Recipient's username" aria-describedby="parse_book_info"
+                           id="ISBNp_input">
+                    <button class="btn btn-outline-secondary" type="button" id="parse_book_info">Искать</button>
+                </div>
+
+
+                <br>
+                <label for="ISBN_file_upload">Или пришлите фото штрихкода</label>
+                <div class="input-group">
+                    <input type="file" class="form-control" id="ISBN_file_upload"
+                           aria-describedby="inputGroupFileAddon04" aria-label="Upload" name="barcode">
+                    <button class="btn btn-outline-secondary" type="submit" id="ISBN_file_upload">Искать</button>
+                </div>
+                <br>
+                <h4 class="mt-3">Или заполните форму самостоятельно</h4>
+
+                <div class="form-group ">
+
+                    <label for="title_input">Название *</label>
+                    <input id="title_input" name="title" class="form-control mb-3" type="text" value="">
+                    <textarea class="form-control" placeholder="Аннотация"
+                              name="annotation" id="annotation_input"></textarea>
+
+                    <label for="pages_input">Количество страниц</label>
+                    <input id="pages_input" name="pages" class="form-control mb-3" type="text" value="">
+
+                    <label for="year_input">Год публикации</label>
+                    <input id="year_input" name="year_of_publication" class="form-control mb-3" type="text" value="">
+
+                    <label for="language_input">Язык</label>
+                    <input id="language_input" name="language" class="form-control mb-3" type="text" value="">
+
+                    <label for="ISBN_input">ISBN</label>
+                    <input id="ISBN_input" name="ISBN" class="form-control mb-3" type="text" value="">
+
+                    <label for="cover_input">Тип обложки</label>
+                    <input id="cover_input" name="type_of_cover" class="form-control mb-3" type="text" value="">
+
+                    <label>
+                        <input id="read_input" type="checkbox" name="read" value="{{ 1 }}" class="mb-3">
+                        Прочитана
+                    </label>
+                    <label>
+                        <input id="read_input" type="checkbox" name="favorite" value="{{ 1 }}" class="mb-3">
+                        Добавить в избранное
+                    </label>
+                    <br>
+
+                    <label for="new_author_input" class="mt-3">Автор. Введите имя:</label>
+                    <input id="new_author_input" name="new_author" class="form-control" type="text" value="">
+
+                    <div class="col-md-6 mt-3">
+                        <div class="form-group">
+                            <label for="bookcase_input">Книжный шкаф</label>
+                            <select id="bookcase_input" class="form-control-sm custom-select" name="bookcase">
+                                {% if active %}
+                                    <option value="{{ active.bookcase.id }}">{{ active.bookcase.title }}</option>
+                                {% else %}
+                                    <option selected disabled>Выберите книжный шкаф</option>
+                                {% endif %}
+                                {% for item in bookcase %}
+                                    <option value="{{ item.id }}">{{ item.title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mt-3">
+                        <div class="form-group">
+                            <label for="shelf_input">Местоположение в шкафу</label>
+                            <select id="shelf_input" class="form-control-sm custom-select" name="shelf">
+                                {% if active %}
+                                    <option value="{{ active.id }}">{{ active.title }}, {{ active.row }}</option>
+                                {% else %}
+                                    <option selected disabled>Место в шкафу</option>
+                                {% endif %}
+                            </select>
+                        </div>
+                    </div>
+                    {% if active %}
+                        <small class="text-info">Местоположение заполнено автоматически</small>
+                    {% endif %}
+
+
+
+                    <div class="form-group mt-3">
+                        <input class="btn btn-outline-dark" type="submit" value="ОК">
+                    </div>
+
+
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% block javascript %}
+        <script src="https://code.jquery.com/jquery-3.5.1.js"
+                integrity="sha256-QWo7LDvxbWT2tbbQ97B53yJnYU3WhH/C8ycbRAkjPDc=" crossorigin="anonymous"></script>
+        <script>
+
+            {#        ПОДГРУЗКА ПОЛОК ДЛЯ ШКАФА ===========================================================#}
+            $("#bookcase_input").change(function () {
+                const bookcaseId = $(this).val();
+                $.ajax({
+                    type: "POST",
+                    url: '{% url "get-shelves-ajax" %}',
+                    data: {
+                        'bookcase_id': bookcaseId,
+                        'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val(),
+                    },
+                    success: function (data) {
+                        let html_data = '<option value="">---------</option>';
+                        data.forEach(function (data) {
+                            html_data += `<option value="${data.id}">${data.title}, ${data.row} ряд</option>`
+                        });
+                        $("#shelf_input").html(html_data);
+                    }
+                });
+            });
+        </script>
+
+        {#        ПАРСИНГ ===========================================================#}
+        <script>
+            $parse_button = $("#parse_book_info");
+            $parse_input = $("#ISBNp_input");
+            $parse_button.click(function () {
+                const query = $parse_input.val();
+                $.ajax({
+                    type: "POST",
+                    url: '{% url "parse-book" %}',
+                    data: {
+                        'query': query,
+                        'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val(),
+                    },
+                    success: function (data) {
+                        $("#pages_input").val(data.pages);
+                        $("#year_input").val(data.year_of_publication);
+                        $("#language_input").val(data.language);
+                        $("#ISBN_input").val(data.ISBN);
+                        $("#cover_input").val(data.type_of_cover);
+                        $("#new_author_input").val(data.author);
+                        $("#annotation_input").val(data.annotation);
+                        $("#title_input").val(data.title);
+                        if (data.error_message !== undefined)
+                            $parse_input.val(data.error_message).attr('class', 'form-control is-invalid text-danger');
+                        else
+                            $parse_input.val("Книга найдена, данные добавлены в форму").attr('class', 'form-control text-info');
+
+                    }
+                });
+            });
+        </script>
+
+        {#        АВТОЗАПОЛНЕНИЕ ===========================================================#}
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.js"></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.js"></script>
+        <link href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/ui-lightness/jquery-ui.css"
+              rel="stylesheet" type="text/css"/>
+        <script>
+            $(function () {
+                var availableTags = [
+                    {% for item in author %}
+                        "{{item.name}}",
+                    {% endfor %}
+                ];
+                $("#new_author_input").autocomplete({
+                    source: availableTags,
+                });
+            });
+
+            $(function () {
+                var availableBooks = [
+                    {% for item in books %}
+                        "{{item.title}}",
+                    {% endfor %}
+                ];
+                $("#title_input").autocomplete({
+                    source: availableBooks,
+                    select: function (event, ui) {
+
+                        $.ajax({
+                            type: "POST",
+                            url: '{% url "get-book-ajax" %}',
+                            data: {
+                                'title': ui.item.value,
+                                'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val(),
+                            },
+                            success: function (data) {
+                                $("#pages_input").val(data.pages);
+                                $("#year_input").val(data.year_of_publication);
+                                $("#language_input").val(data.language);
+                                $("#ISBN_input").val(data.ISBN);
+                                $("#cover_input").val(data.type_of_cover);
+                                $("#new_author_input").val(data.new_author);
+
+                            }
+                        });
+                    }
+                });
+            });
+        </script>
+    {% endblock javascript %}
+
+{% endblock content %}

@@ -1,0 +1,135 @@
+{% extends "catalog/base.html" %}
+{% load crispy_forms_tags %}
+{% block content %}
+
+    <div class="card px-4 py-4">
+
+        {% if errors %}
+            <div class="alert alert-danger">
+                <h4>Ошибка:</h4>
+                {% for error in errors %}
+                    <p>{{ error|first }} - {{ error|last }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="container">
+            <h3>Книга</h3>
+            <form method="POST">
+                {% csrf_token %}
+
+                <h4 class="mt-3">Измените данные:</h4>
+
+                <div class="form-group ">
+
+                    <label for="title_input">Название *</label>
+                    <input id="title_input" name="title" class="form-control mb-3"
+                           type="text" value="{{ book.title }}">
+                    <textarea class="form-control" placeholder="Аннотация"
+                              name="annotation">{{ book.annotation }}</textarea>
+
+                    <label for="pages_input">Количество страниц</label>
+                    <input id="pages_input" name="pages" class="form-control mb-3"
+                           type="text" value="{% if book.pages %}{{ book.pages }}{% endif %}">
+
+
+                    <label for="year_input">Год публикации</label>
+                    <input id="year_input" name="year_of_publication" class="form-control mb-3"
+                           type="text" value="{{ book.year_of_publication }}">
+
+                    <label for="language_input">Язык</label>
+                    <input id="language_input" name="language" class="form-control mb-3"
+                           type="text" value="{{ book.language }}">
+
+                    <label for="ISBN_input">ISBN</label>
+                    <input id="ISBN_input" name="ISBN" class="form-control mb-3"
+                           type="text" value="{% if book.ISBN %}{{ book.ISBN }}{% endif %} ">
+
+
+                    <label for="cover_input">Тип обложки</label>
+                    <input id="cover_input" name="type_of_cover" class="form-control mb-3"
+                           type="text" value="{{ book.type_of_cover }}">
+                    <br>
+
+
+                    <label for="new_author_input" class="mt-3">Автор. Введите имя:</label>
+                    <input id="new_author_input" name="new_author" class="form-control" type="text"
+                           value="{{ book.author }}">
+
+                    <div class="col-md-6 mt-3">
+                        <div class="form-group">
+                            <label for="bookcase_input">Книжный шкаф</label>
+                            <select id="bookcase_input" class="form-control-sm custom-select" name="bookcase">
+                                <option value="{{ book.bookcase.id }}">{{ book.bookcase.title }}</option>
+                                {% for item in bookcase %}
+                                    <option value="{{ item.id }}">{{ item.title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mt-3">
+                        <div class="form-group">
+                            <label for="shelf_input">Местоположение в шкафу</label>
+                            <select id="shelf_input" class="form-control-sm custom-select" name="shelf">
+                                <option value="{{ book.shelf.id }}">{{ book.shelf.title }}</option>
+                            </select>
+                        </div>
+                    </div>
+
+
+                    <div class="form-group mt-3">
+                        <input class="btn btn-outline-dark" type="submit" value="ОК">
+                    </div>
+
+
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    {% block javascript %}
+
+        <script src="https://code.jquery.com/jquery-3.5.1.js"
+                integrity="sha256-QWo7LDvxbWT2tbbQ97B53yJnYU3WhH/C8ycbRAkjPDc=" crossorigin="anonymous"></script>
+        <script>
+            $("#bookcase_input").change(function () {
+                const bookcaseId = $(this).val();
+                $.ajax({
+                    type: "POST",
+                    url: '{% url "get-shelves-ajax" %}',
+                    data: {
+                        'bookcase_id': bookcaseId,
+                        'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val(),
+                    },
+                    success: function (data) {
+                        let html_data = '<option value="">---------</option>';
+                        data.forEach(function (data) {
+                            html_data += `<option value="${data.id}">${data.title}, ${data.row} ряд</option>`
+                        });
+                        $("#shelf_input").html(html_data);
+                    }
+                });
+            });
+        </script>
+
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.js"></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.js"></script>
+        <link href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/themes/ui-lightness/jquery-ui.css"
+              rel="stylesheet" type="text/css"/>
+        <script>
+            $(function () {
+                var availableTags = [
+                    {% for item in author %}
+                        "{{item.name}}",
+                    {% endfor %}
+                ];
+                $("#new_author_input").autocomplete({
+                    source: availableTags,
+                });
+            });
+        </script>
+    {% endblock javascript %}
+
+{% endblock content %}

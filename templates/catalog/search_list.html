@@ -1,0 +1,93 @@
+{% extends "catalog/base.html" %}
+{% block content %}
+
+    <div class="card text-center">
+        <div class="card-body">
+            <div class="float-start d-none d-md-block">
+                <h2 class="account-heading">{{ user.username }}</h2>
+                <a class="nav-link" href="{% url 'profile' %}">
+                    <img class="rounded-circle  account-img img-thumbnail" src="{{ user.profile.image.url }}"> </a>
+            </div>
+
+            {% if results.book %}
+                <h4 class="card-title mt-3">Книги:</h4>
+
+                <div class="card-text">
+                    <div class="list-group text-center">
+
+
+                        {% for book in results.book %}
+                            <a class="list-group-item {% if book.favorite %}list-group-item-success{% endif %}"
+                               href="{% url 'book-detail' book.pk %}">
+                                {% if book.read %}<b>{% endif %}
+
+                                <div class="d-flex justify-content-between">
+                                                        <span class="col text-left">
+                                                        {{ book.author.name }} - {{ book.title }}
+                                                    </span>
+                                    <span class="col text-right">
+                                                        {{ book.bookcase.title }} - {{ book.shelf.title|lower }},  {{ book.shelf.row|lower }} ряд
+                                                    </span>
+                                </div>
+
+                                {% if book.read %}</b>{% endif %}
+                            </a>
+                        {% endfor %}
+
+                    </div>
+                </div>
+            {% endif %}
+
+
+            {% if results.author %}
+                <h4 class="card-title mt-3">Авторы:</h4>
+
+                <div class="card-text">
+                    <div class="list-group text-center">
+
+
+                        {% for author in results.author %}
+                            <a class="list-group-item list-group-item-action"
+                               href="{% url 'author-detail' author.id %}">
+                                {{ author.name }} - {{ author.book_set.all|length }} книг
+                            </a>
+                        {% endfor %}
+
+
+                    </div>
+                </div>
+
+            {% endif %}
+
+
+            {% if results.bookcase %}
+                <h4 class="card-title mt-3">Шкафы:</h4>
+
+                <div class="card-text">
+                    <div class="list-group text-center">
+
+
+                        {% for bookcase in results.bookcase %}
+
+                            <a class="list-group-item list-group-item-action"
+                               href="{% url 'bookcase-detail' bookcase.id %}">
+                                {{ bookcase.title }} - {{ bookcase.book_set.all|length }} книг
+                            </a>
+                        {% endfor %}
+
+
+                    </div>
+                </div>
+
+
+            {% endif %}
+
+
+        </div>
+    </div>
+
+
+
+
+
+{% endblock content %}
