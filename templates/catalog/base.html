@@ -44,39 +44,45 @@
                         <a class="dropdown-item" href="{% url "bookcase-create" %}">Добавить</a>
                     </div>
                 </li>
+                {% if user.bookcase_set.all|length != 0 %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAuthors" role="button"
+                           data-bs-toggle="dropdown"
+                           aria-haspopup="true" aria-expanded="false">
+                            Авторы
+                        </a>
+                        <div class="dropdown-menu" aria-labelledby="navbarDropdownAuthors">
+                            <a class="dropdown-item" href="{% url "author-list" %}">Все</a>
+                            <a class="dropdown-item" href="{% url "author-create" %}">Добавить</a>
+                        </div>
+                    </li>
 
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAuthors" role="button"
-                       data-bs-toggle="dropdown"
-                       aria-haspopup="true" aria-expanded="false">
-                        Авторы
-                    </a>
-                    <div class="dropdown-menu" aria-labelledby="navbarDropdownAuthors">
-                        <a class="dropdown-item" href="{% url "author-list" %}">Все</a>
-                        <a class="dropdown-item" href="{% url "author-create" %}">Добавить</a>
-                    </div>
-                </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownBooks" role="button"
+                           data-bs-toggle="dropdown"
+                           aria-haspopup="true" aria-expanded="false">
+                            Книги
+                        </a>
+                        <div class="dropdown-menu" aria-labelledby="navbarDropdownBooks">
+                            <a class="dropdown-item" href="{% url 'book-list' %}">Все</a>
+                            <a class="dropdown-item text-info" href="{% url 'favorite-list' %}">Избранное</a>
+                            <a class="dropdown-item text-success" href="{% url 'read-list' %}">Прочитанное</a>
+                            <a class="dropdown-item text-secondary" href="{% url 'unread-list' %}">Непрочитанное</a>
+                            <a class="dropdown-item" href="{% url "book-create" %}">Добавить</a>
+                        </div>
+                    </li>
+                    <li>
+                        <form class="px-3 d-flex" action="{% url 'search-list' %}" method="GET">
+                            {% csrf_token %}
+                            <input id="search" name="q" type="text" class="form-control mx-2" placeholder="Поиск">
+                        </form>
+                    </li>
+                {% else %}
 
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownBooks" role="button"
-                       data-bs-toggle="dropdown"
-                       aria-haspopup="true" aria-expanded="false">
-                        Книги
-                    </a>
-                    <div class="dropdown-menu" aria-labelledby="navbarDropdownBooks">
-                        <a class="dropdown-item" href="{% url 'book-list' %}">Все</a>
-                        <a class="dropdown-item text-info" href="{% url 'favorite-list' %}">Избранное</a>
-                        <a class="dropdown-item text-success" href="{% url 'read-list' %}">Прочитанное</a>
-                        <a class="dropdown-item text-secondary" href="{% url 'unread-list' %}">Непрочитанное</a>
-                        <a class="dropdown-item" href="{% url "book-create" %}">Добавить</a>
-                    </div>
-                </li>
-                <li>
-                    <form class="px-3 d-flex" action="{% url 'search-list' %}" method="GET">
-                        {% csrf_token %}
-                        <input id="search" name="q" type="text" class="form-control mx-2" placeholder="Поиск">
-                    </form>
-                </li>
+                    <a class="nav-link" href="{% url "bookcase-create" %}">
+                        Чтобы заполнить библиотеку, нужно добавить шкаф!</a>
+
+                {% endif %}
 
             </ul>
 
@@ -97,6 +103,9 @@
 
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'profile' %}">Профиль</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://t.me/book_locator_bot">Telegram</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'logout' %}">Выход</a>
@@ -176,20 +185,20 @@
         var availableTags = [
             {% for item in user.book_set.all %}
                 {
-                    label: "{{item.title}} - книга",
-                    value: "{% url 'book-detail' item.pk %}"
+                    label: "{{item.title}}",
+                    value: "{% url 'book-detail' item.pk %}",
                 },
             {% endfor %}
             {% for item in user.authors.all %}
                 {
-                    label: "{{item.name}} - автор",
+                    label: "{{item.name}}",
                     value: "{% url 'author-detail' item.pk %}"
                 },
 
             {% endfor %}
             {% for item in user.bookcase_set.all %}
                 {
-                    label: "{{item.title}} - шкаф",
+                    label: "{{item.title}}",
                     value: "{% url 'bookcase-detail' item.pk %}"
                 },
             {% endfor %}

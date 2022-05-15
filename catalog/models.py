@@ -43,9 +43,8 @@ class Shelf(models.Model):
     def get_absolute_url(self):
         return reverse('shelf-detail', kwargs={'pk': self.pk})
 
-    @staticmethod
-    def get_current_shelf():
-        return Shelf.objects.filter(is_current=True)
+    def get_current_shelf(self):
+        return Shelf.objects.filter(is_current=True, owner=self.owner)
 
 
 class Author(models.Model):
