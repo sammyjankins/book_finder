@@ -136,7 +136,8 @@ def global_queryset(request):
 def get_queryset_for_book_create(request, original_context):
     objects = {key: Class_.objects.all().filter(owner=request.user)
                for key, Class_ in {'bookcase': BookCase, 'author': Author}.items()}
-    objects.update({'books': Book.objects.all().distinct('title'), 'active': Shelf.get_current_shelf().first()})
+    shelf = Shelf.objects.filter(owner=request.user).first()
+    objects.update({'books': Book.objects.all().distinct('title'), 'active': Shelf.get_current_shelf(shelf).first()})
     if errors := original_context['form'].errors:
         objects.update({'errors': {error_fields[key]: value for key, value in errors.items()}})
     return objects
@@ -198,7 +199,8 @@ def create_book(user, isbn_number):
     book_info = dict()
     try:
         parser.extract_fields()
-        current_shelf = Shelf.get_current_shelf().filter(owner=user).first()
+        shelf = Shelf.objects.filter(owner=user).first()
+        current_shelf = Shelf.get_current_shelf(shelf).filter(owner=user).first()
         book_info = parser.book_info
         if current_shelf:
             book_info.update({'shelf': current_shelf, 'bookcase': current_shelf.bookcase, 'owner': user})
