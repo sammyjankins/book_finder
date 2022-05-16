@@ -177,6 +177,7 @@ def add_book(chat_id, profile, update):
     except Exception as e:
         print(e)
         isbn_number = update.message.text
+
     if isbn_number:
         book = create_book(user, isbn_number)
         if type(book) is Book:
@@ -306,7 +307,7 @@ def keyboard_callback_handler(update: Update, context: CallbackContext):
     query = update.callback_query
     data = query.data
     chat_id = update.effective_message.chat_id
-    current_text = update.effective_message.text
+
     profile = get_profile_or_ask_register(chat_id)
     if profile:
 
