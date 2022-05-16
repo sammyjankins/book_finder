@@ -31,6 +31,7 @@ def bind_tele_id(request, **kwargs):
         profile = Profile.objects.filter(user=request.user).first()
         for binded in Profile.objects.filter(tele_id=kwargs['tele_id']):
             binded.tele_id = None
+            binded.save()
         profile.tele_id = kwargs['tele_id']
         profile.save()
         print(profile)
