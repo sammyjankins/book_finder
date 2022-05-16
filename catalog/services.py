@@ -1,4 +1,5 @@
 import os
+from pprint import pprint
 
 from PIL import Image
 from django.contrib import messages
@@ -196,25 +197,27 @@ def parse_book(request):
 
 def create_book(user, isbn_number):
     parser = OzonParser(str(isbn_number))
-    book_info = dict()
+    book_info = {'author': '', 'year_of_publication': '',
+                 'type_of_cover': '', 'ISBN': '', 'language': '', 'pages': None, }
     try:
         parser.extract_fields()
         shelf = Shelf.objects.filter(owner=user).first()
         current_shelf = Shelf.get_current_shelf(shelf).filter(owner=user).first()
-        book_info = parser.book_info
+        book_info.update(parser.book_info)
         if current_shelf:
             book_info.update({'shelf': current_shelf, 'bookcase': current_shelf.bookcase, 'owner': user})
         if book_info['author']:
             author = Author.objects.filter(name=book_info['author'], owner=user).first()
             if author is None:
                 author = Author.objects.create(name=book_info['author'], owner=user)
-
             book_info['author'] = author
+            pprint(book_info)
             book = Book.objects.create(**book_info)
             return book
         else:
             return f'Не указан автор'
     except Exception as e:
+        print(e)
         if not book_info:
             return f'Не найдены данные по запросу'
         else:
