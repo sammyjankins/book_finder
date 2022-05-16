@@ -30,7 +30,7 @@ def bind_tele_id(request, **kwargs):
     if request.method == "GET":
         profile = Profile.objects.filter(user=request.user).first()
         for binded in Profile.objects.filter(tele_id=kwargs['tele_id']):
-            binded.tele_id = None
+            binded.tele_id = ''
             binded.save()
         profile.tele_id = kwargs['tele_id']
         profile.save()
