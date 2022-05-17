@@ -1,3 +1,5 @@
+from pprint import pprint
+
 from django.core.management.base import BaseCommand
 from telegram import Bot, Update
 from telegram.ext import CallbackContext, Filters, MessageHandler, Updater
@@ -9,7 +11,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 
 from catalog.management.commands.voice_processing import synthesize, recognize
-from catalog.models import Book
+from catalog.models import Book, Shelf
 from catalog.services import scan_isbn, create_book, owners_objects_queryset
 from users.models import Profile
 
@@ -48,6 +50,15 @@ def get_last_book_info(profile):
     book_info = '\n'.join([f'{keys[key]}{getattr(book, key)}'
                            for key in keys if getattr(book, key) is not None])
     return book_info
+
+
+def get_profile_info(profile):
+    current_shelf = Shelf.objects.filter(owner=profile.user).first().get_current_shelf()
+    return (f'Пользователь: {profile.user.username}\n'
+            f'Активный шкаф: {current_shelf.bookcase.title.lower()}\n'
+            f'Активная полка: {current_shelf}\n'
+            f'Последняя книга: {profile.last_book}\n'
+            f'Telegram id: {profile.tele_id}\n')
 
 
 def set_dialog_state(profile, state):
@@ -113,13 +124,14 @@ def answer(update: Update, context: CallbackContext):
             reply_text = 'Вы можете добавить книгу в библиотеку. Для этого у вас должен быть создан книжный шкаф.'
             update.message.reply_text(
                 text=reply_text,
-                reply_markup=get_add_keyboard() if profile.last_book else get_nolastbook_keyboard(), )
+                reply_markup=get_add_keyboard() if get_profile_or_ask_register(
+                    chat_id).last_book else get_nolastbook_keyboard(), )
         elif profile.state == 1:
-            search_answer(profile, reply_text, update)
-            set_dialog_state(profile, 0)
+            search_answer(chat_id, reply_text, update)
+            set_dialog_state(get_profile_or_ask_register(chat_id), 0)
         elif profile.state == 2:
-            add_book(chat_id, profile, update)
-            set_dialog_state(profile, 0)
+            add_book(chat_id, update)
+            set_dialog_state(get_profile_or_ask_register(chat_id), 0)
     else:
         reply_text = ('Для продолжения работы необходимо зарегистрироваться на сайте и заполнить базу данных. '
                       'Если вы уже зарегистрированы, привяжите ваш телеграм к базе данных.')
@@ -129,7 +141,7 @@ def answer(update: Update, context: CallbackContext):
         )
 
 
-def search_answer(profile, reply_text, update):
+def search_answer(chat_id, reply_text, update):
     try:
         file = update.message.voice.get_file()
         file_name = file.download()
@@ -142,7 +154,7 @@ def search_answer(profile, reply_text, update):
         is_voice = False
 
     if text:
-        result = owners_objects_queryset(profile.user.id, Book, text).first()
+        result = owners_objects_queryset(get_profile_or_ask_register(chat_id).user.id, Book, text).first()
         if result:
             bookcase = result.bookcase.title
             shelf = result.shelf.title
@@ -157,16 +169,16 @@ def search_answer(profile, reply_text, update):
         synthesize(reply_text, answer_path)
         update.message.reply_voice(
             voice=(open(answer_path, 'rb')),
-            reply_markup=get_search_edit_info_keyboard(profile)
+            reply_markup=get_search_edit_info_keyboard(get_profile_or_ask_register(chat_id))
         )
     else:
         update.message.reply_text(
             text=reply_text,
-            reply_markup=get_search_edit_info_keyboard(profile)
+            reply_markup=get_search_edit_info_keyboard(get_profile_or_ask_register(chat_id))
         )
 
 
-def add_book(chat_id, profile, update):
+def add_book(chat_id, update):
     user = User.objects.get(profile__tele_id=chat_id)
     try:
         file = update.message.photo[-1].get_file()
@@ -182,11 +194,12 @@ def add_book(chat_id, profile, update):
         book = create_book(user, isbn_number)
         if type(book) is Book:
             create_book(user, isbn_number)
-            profile = Profile.objects.get(tele_id=profile.tele_id)  # refreshing profile to work with actual data
+            profile = get_profile_or_ask_register(chat_id)
             update.message.reply_text(
                 text='Книга была успешно добавлена в активную полку!'
                      'Вы можете добавить или изменить информацию о книге.'
-                     f'Книга:\n{get_last_book_info(profile)}',
+                     f'Книга:\n{get_last_book_info(profile)}, профиль {profile}, {profile.user.username}, '
+                     f'{profile.last_book}',
                 reply_markup=get_search_edit_info_keyboard(profile),
             )
         else:
@@ -227,6 +240,7 @@ CB_NEW_BOOK = "callback_button_new_book"
 CB_NEW_BOOKCASE = "callback_button_new_bookcase"
 CB_EDIT = "callback_button_edit"
 CB_BOOK_INFO = "callback_button_book_info"
+CB_PROFILE_INFO = "callback_button_profile_info"
 CB_REGISTER = "callback_button_register"
 CB_BIND = "callback_button_bind"
 
@@ -235,7 +249,8 @@ TITLES = {
     CB_NEW_BOOK: "Добавить книгу",
     CB_NEW_BOOKCASE: "Добавить шкаф",
     CB_EDIT: "Редактировать",
-    CB_BOOK_INFO: "Инфо",
+    CB_BOOK_INFO: "Последняя книга",
+    CB_PROFILE_INFO: "Мой профиль",
     CB_REGISTER: "Регистрация",
     CB_BIND: "Привязать Telegram",
 
@@ -250,6 +265,9 @@ def get_search_edit_info_keyboard(profile):
                                  url=f'{os.environ.get("MY_CURRENT_URL")}book/{get_last_book(profile)}/update/',
                                  callback_data=CB_EDIT),
             InlineKeyboardButton(TITLES[CB_BOOK_INFO], callback_data=CB_BOOK_INFO),
+        ],
+        [
+            InlineKeyboardButton(TITLES[CB_PROFILE_INFO], callback_data=CB_PROFILE_INFO),
         ],
         [
             InlineKeyboardButton(TITLES[CB_SEARCH], callback_data=CB_SEARCH),
@@ -308,28 +326,34 @@ def keyboard_callback_handler(update: Update, context: CallbackContext):
     data = query.data
     chat_id = update.effective_message.chat_id
 
-    profile = get_profile_or_ask_register(chat_id)
-    if profile:
+    if get_profile_or_ask_register(chat_id):
 
         if data == CB_NEW_BOOK:
             context.bot.send_message(
                 chat_id=chat_id,
                 text="Мне нужен номер isbn, или фото штрихкода на книге.",
             )
-            set_dialog_state(profile, 2)
+            set_dialog_state(get_profile_or_ask_register(chat_id), 2)
         else:
-            if profile.last_book is not None:
+            if get_profile_or_ask_register(chat_id).last_book is not None:
                 if data == CB_SEARCH:
                     context.bot.send_message(
                         chat_id=chat_id,
                         text="Какую книгу ищем?",
                     )
-                    set_dialog_state(profile, 1)
+                    set_dialog_state(get_profile_or_ask_register(chat_id), 1)
                 if data == CB_BOOK_INFO:
-                    book_info = get_last_book_info(profile)
+                    book_info = get_last_book_info(get_profile_or_ask_register(chat_id))
                     context.bot.send_message(
                         chat_id=chat_id,
                         text=book_info,
+                        reply_markup=get_add_keyboard(),
+                    )
+                if data == CB_PROFILE_INFO:
+                    profile_info = get_profile_info(get_profile_or_ask_register(chat_id))
+                    context.bot.send_message(
+                        chat_id=chat_id,
+                        text=profile_info,
                         reply_markup=get_add_keyboard(),
                     )
 

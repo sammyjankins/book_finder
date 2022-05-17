@@ -137,8 +137,8 @@ def global_queryset(request):
 def get_queryset_for_book_create(request, original_context):
     objects = {key: Class_.objects.all().filter(owner=request.user)
                for key, Class_ in {'bookcase': BookCase, 'author': Author}.items()}
-    shelf = Shelf.objects.filter(owner=request.user).first()
-    objects.update({'books': Book.objects.all().distinct('title'), 'active': Shelf.get_current_shelf(shelf).first()})
+    objects.update({'books': Book.objects.all().distinct('title'),
+                    'active': Shelf.objects.filter(owner=request.user).first().get_current_shelf()})
     if errors := original_context['form'].errors:
         objects.update({'errors': {error_fields[key]: value for key, value in errors.items()}})
     return objects
@@ -201,8 +201,7 @@ def create_book(user, isbn_number):
                  'type_of_cover': '', 'ISBN': '', 'language': '', 'pages': None, }
     try:
         parser.extract_fields()
-        shelf = Shelf.objects.filter(owner=user).first()
-        current_shelf = Shelf.get_current_shelf(shelf).filter(owner=user).first()
+        current_shelf = Shelf.objects.filter(owner=user).first().get_current_shelf()
         book_info.update(parser.book_info)
         if current_shelf:
             book_info.update({'shelf': current_shelf, 'bookcase': current_shelf.bookcase, 'owner': user})
@@ -211,7 +210,6 @@ def create_book(user, isbn_number):
             if author is None:
                 author = Author.objects.create(name=book_info['author'], owner=user)
             book_info['author'] = author
-            pprint(book_info)
             book = Book.objects.create(**book_info)
             return book
         else:
@@ -221,6 +219,7 @@ def create_book(user, isbn_number):
         if not book_info:
             return f'Не найдены данные по запросу'
         else:
+            print(book_info)
             return f'Необходимо создать шкаф для добавления книг'
 
 
@@ -246,6 +245,13 @@ def swap_read(kwargs):
     book = Book.objects.get(pk=kwargs['pk'])
     book.read = False if book.read else True
     book.save()
+
+
+def last_book_delete(request, **kwargs):
+    profile = Profile.objects.get(user=request.user)
+    if profile.last_book.pk == kwargs['pk']:
+        profile.last_book = Book.objects.filter(owner=request.user).exclude(pk=profile.last_book.pk).last()
+        profile.save()
 
 
 if __name__ == '__main__':

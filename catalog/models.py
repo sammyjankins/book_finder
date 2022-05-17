@@ -38,13 +38,13 @@ class Shelf(models.Model):
     owner = models.ForeignKey('auth.User', related_name='shelves', on_delete=models.CASCADE)
 
     def __str__(self):
-        return f'{self.title}, {self.row} ряд'
+        return f'{self.title.lower()}, {self.row.lower()} ряд'
 
     def get_absolute_url(self):
         return reverse('shelf-detail', kwargs={'pk': self.pk})
 
     def get_current_shelf(self):
-        return Shelf.objects.filter(is_current=True, owner=self.owner)
+        return Shelf.objects.filter(is_current=True, owner=self.owner).first()
 
 
 class Author(models.Model):

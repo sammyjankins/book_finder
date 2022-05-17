@@ -13,8 +13,11 @@ def create_bookcase(sender, instance, created, **kwargs):
 
 
 @receiver(signal=post_save, sender=Book)
-def create_bookcase(sender, instance, created, **kwargs):
+def create_book(sender, instance, created, **kwargs):
     if created:
-        profile = Profile.objects.get(user=instance.owner)
-        profile.last_book = instance
-        profile.save()
+        instance.owner.profile.last_book = instance
+
+
+@receiver(signal=post_save, sender=Book)
+def save_profile(sender, instance, **kwargs):
+    instance.owner.profile.save()

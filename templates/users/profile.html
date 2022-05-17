@@ -11,7 +11,12 @@
 
                 <h2 class="account-heading">{{ user.username }}</h2>
                 <p class="text-secondary">{{ user.email }}</p>
-                <p class="text-secondary">Последняя книга - {{ user.profile.last_book.title }}</p>
+                {% if user.profile.last_book %}
+                    <a class="text-secondary text-decoration-none"
+                       href="{% url 'book-detail' user.profile.last_book.pk %}">
+                        Последняя книга - {{ user.profile.last_book }}</a>
+
+                {% endif %}
                 {% if user.profile.tele_id %}
                     <p class="text-secondary">Telegram_id - {{ user.profile.tele_id }}</p>
                 {% endif %}

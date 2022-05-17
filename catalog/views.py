@@ -8,7 +8,7 @@ from catalog.models import BookCase, Shelf, Author, Book, Note
 from catalog.services import owners_objects_queryset, set_owner, check_owership, get_queryset_for_book_create, \
     get_queryset_for_book_update, get_shelves_ajax, new_author, get_book_ajax, global_queryset, new_active_shelf, \
     parse_book, book_from_isbn, get_favorite_queryset, check_author, swap_favorite, get_read_queryset, \
-    get_unread_queryset, swap_read
+    get_unread_queryset, swap_read, last_book_delete
 
 
 class BookcaseListView(ListView):
@@ -241,6 +241,10 @@ class BookDeleteView(UserPassesTestMixin, DeleteView):
 
     def test_func(self):
         return check_owership(self)
+
+    def post(self, request, *args, **kwargs):
+        last_book_delete(request, **kwargs)
+        return super(BookDeleteView, self).post(request, **kwargs)
 
 
 class NoteDeleteView(UserPassesTestMixin, DeleteView):

@@ -93,10 +93,10 @@
 
                     <li class="nav-item">
                         {% with shelf=user.shelves.all|first %}
-                            {% for active in shelf.get_current_shelf %}
-                                <a class="nav-link text-primary" href="{% url 'shelf-detail' active.id %}">
-                                    [ Автивное место - шкаф {{ active.bookcase|lower }}, {{ active|lower }} ]</a>
-                            {% endfor %}
+                            <a class="nav-link text-primary" href="{% url 'shelf-detail' shelf.get_current_shelf.id %}">
+                                [ Автивное место -
+                                шкаф {{ shelf.get_current_shelf.bookcase|lower }}, {{ shelf.get_current_shelf|lower }}
+                                ]</a>
                         {% endwith %}
 
                     </li>
