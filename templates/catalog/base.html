@@ -93,10 +93,14 @@
 
                     <li class="nav-item">
                         {% with shelf=user.shelves.all|first %}
-                            <a class="nav-link text-primary" href="{% url 'shelf-detail' shelf.get_current_shelf.id %}">
-                                [ Автивное место -
-                                шкаф {{ shelf.get_current_shelf.bookcase|lower }}, {{ shelf.get_current_shelf|lower }}
-                                ]</a>
+                            {% if shelf %}
+                                <a class="nav-link text-primary"
+                                   href="{% url 'shelf-detail' shelf.get_current_shelf.id %}">
+                                    [ Автивное место -
+                                    шкаф {{ shelf.get_current_shelf.bookcase|lower }}, {{ shelf.get_current_shelf|lower }}
+                                    ]</a>
+                            {% endif %}
+
                         {% endwith %}
 
                     </li>

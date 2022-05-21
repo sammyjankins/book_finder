@@ -90,4 +90,3 @@ if __name__ == '__main__':
             parser.extract_fields()
         except Exception as e:
             parser.book_info.clear()
-        pprint(parser.book_info)

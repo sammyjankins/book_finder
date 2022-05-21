@@ -61,11 +61,6 @@ def get_profile_info(profile):
             f'Telegram id: {profile.tele_id}\n')
 
 
-def set_dialog_state(profile, state):
-    profile.state = state
-    profile.save()
-
-
 def get_profile_or_ask_register(chat_id):
     try:
         profile = Profile.objects.get(tele_id=chat_id)
@@ -128,10 +123,10 @@ def answer(update: Update, context: CallbackContext):
                     chat_id).last_book else get_nolastbook_keyboard(), )
         elif profile.state == 1:
             search_answer(chat_id, reply_text, update)
-            set_dialog_state(get_profile_or_ask_register(chat_id), 0)
+            get_profile_or_ask_register(chat_id).set_dialog_state(0)
         elif profile.state == 2:
             add_book(chat_id, update)
-            set_dialog_state(get_profile_or_ask_register(chat_id), 0)
+            get_profile_or_ask_register(chat_id).set_dialog_state(0)
     else:
         reply_text = ('Для продолжения работы необходимо зарегистрироваться на сайте и заполнить базу данных. '
                       'Если вы уже зарегистрированы, привяжите ваш телеграм к базе данных.')
@@ -326,6 +321,7 @@ def keyboard_callback_handler(update: Update, context: CallbackContext):
     data = query.data
     chat_id = update.effective_message.chat_id
 
+    profile = get_profile_or_ask_register(chat_id)
     if get_profile_or_ask_register(chat_id):
 
         if data == CB_NEW_BOOK:
@@ -333,7 +329,7 @@ def keyboard_callback_handler(update: Update, context: CallbackContext):
                 chat_id=chat_id,
                 text="Мне нужен номер isbn, или фото штрихкода на книге.",
             )
-            set_dialog_state(get_profile_or_ask_register(chat_id), 2)
+            profile.set_dialog_state(2)
         else:
             if get_profile_or_ask_register(chat_id).last_book is not None:
                 if data == CB_SEARCH:
@@ -341,7 +337,7 @@ def keyboard_callback_handler(update: Update, context: CallbackContext):
                         chat_id=chat_id,
                         text="Какую книгу ищем?",
                     )
-                    set_dialog_state(get_profile_or_ask_register(chat_id), 1)
+                    profile.set_dialog_state(1)
                 if data == CB_BOOK_INFO:
                     book_info = get_last_book_info(get_profile_or_ask_register(chat_id))
                     context.bot.send_message(

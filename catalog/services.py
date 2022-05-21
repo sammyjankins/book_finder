@@ -197,11 +197,12 @@ def parse_book(request):
 
 def create_book(user, isbn_number):
     parser = OzonParser(str(isbn_number))
-    book_info = {'author': '', 'year_of_publication': '',
-                 'type_of_cover': '', 'ISBN': '', 'language': '', 'pages': None, }
+    book_info = None
     try:
         parser.extract_fields()
         current_shelf = Shelf.objects.filter(owner=user).first().get_current_shelf()
+        book_info = {'author': '', 'year_of_publication': '',
+                     'type_of_cover': '', 'ISBN': '', 'language': '', 'pages': None, }
         book_info.update(parser.book_info)
         if current_shelf:
             book_info.update({'shelf': current_shelf, 'bookcase': current_shelf.bookcase, 'owner': user})
@@ -215,9 +216,9 @@ def create_book(user, isbn_number):
         else:
             return f'Не указан автор'
     except Exception as e:
-        print(e)
+        print(f'EXPILIARMUS{e}')
         if not book_info:
-            return f'Не найдены данные по запросу'
+            return f'Не удалось тзвлечь данные по запросу, проблема на стороне источника данных.'
         else:
             print(book_info)
             return f'Необходимо создать шкаф для добавления книг'
@@ -252,6 +253,13 @@ def last_book_delete(request, **kwargs):
     if profile.last_book.pk == kwargs['pk']:
         profile.last_book = Book.objects.filter(owner=request.user).exclude(pk=profile.last_book.pk).last()
         profile.save()
+
+
+def change_active_shelf(request, **kwargs):
+    new_active = Shelf.objects.exclude(bookcase_id=kwargs['pk']).first()
+    if new_active:
+        new_active.is_current = True
+        new_active.save()
 
 
 if __name__ == '__main__':
