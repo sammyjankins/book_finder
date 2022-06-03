@@ -108,7 +108,7 @@ if __name__ == '__main__':
     ParseManager.register('get_request_collector')
     ParseManager.register('get_output_collector')
 
-    reader_manager = ParseManager(address=('127.0.0.1', 80), authkey=b'qwerasdf')
+    reader_manager = ParseManager(address=('127.0.0.1', 50000), authkey=b'qwerasdf')
     reader_manager.connect()
 
     request_collector = reader_manager.get_request_collector()
