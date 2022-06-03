@@ -1,6 +1,7 @@
-import os
 from pprint import pprint
 
+from multiprocessing.managers import BaseManager
+from time import sleep
 from PIL import Image
 from django.contrib import messages
 from django.forms.models import model_to_dict
@@ -9,7 +10,6 @@ from django.urls import reverse
 from pyzbar.pyzbar import decode as p_decode
 
 from catalog.models import Shelf, BookCase, Author, Book
-from catalog.parser import OzonParser
 from users.models import Profile
 
 shelf_titles = {
@@ -48,6 +48,20 @@ search_models = {
     'автор': Author,
     'книга': Book,
 }
+
+
+class CQManager(BaseManager):
+    pass
+
+
+CQManager.register('get_request_collector')
+CQManager.register('get_output_collector')
+
+reader_manager = CQManager(address=('127.0.0.1', 80), authkey=b'qwerasdf')
+reader_manager.connect()
+
+request_collector = reader_manager.get_request_collector()
+output_collector = reader_manager.get_output_collector()
 
 
 def set_owner(request, form):
@@ -185,25 +199,40 @@ def scan_isbn(img_file):
 
 
 def parse_book(request):
-    parser = OzonParser(request.POST['query'])
     try:
-        parser.extract_fields()
-        return JsonResponse(parser.book_info, safe=False)
+        user = request.user.username
+        query = request.POST['query']
+        request_collector.update({user: query})
+        print(request_collector)
+        while True:
+            if user not in output_collector.keys():
+                sleep(2)
+            else:
+                parsed = output_collector.pop(user)
+                print(parsed)
+
+                return JsonResponse(parsed, safe=False)
     except Exception as e:
+        print(e)
         data = dict()
         data['error_message'] = 'Не удалось найти книгу по вашему запросу'
         return JsonResponse(data)
 
 
 def create_book(user, isbn_number):
-    parser = OzonParser(str(isbn_number))
+    request_collector.update({user: str(isbn_number)})
     book_info = None
     try:
-        parser.extract_fields()
+        while True:
+            if user not in output_collector.keys():
+                sleep(2)
+            else:
+                parsed = output_collector.pop(user)
+                break
         current_shelf = Shelf.objects.filter(owner=user).first().get_current_shelf()
         book_info = {'author': '', 'year_of_publication': '',
                      'type_of_cover': '', 'ISBN': '', 'language': '', 'pages': None, }
-        book_info.update(parser.book_info)
+        book_info.update(parsed)
         if current_shelf:
             book_info.update({'shelf': current_shelf, 'bookcase': current_shelf.bookcase, 'owner': user})
         if book_info['author']:
