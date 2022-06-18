@@ -198,63 +198,66 @@ def scan_isbn(img_file):
         return None
 
 
+def look_for_response(user):
+    while True:
+        if user not in output_collector.keys():
+            sleep(2)
+        else:
+            return output_collector.pop(user)
+
+
 def parse_book(request):
     try:
+
         user = request.user.username
         query = request.POST['query']
         request_collector.update({user: query})
         print(request_collector)
-        while True:
-            if user not in output_collector.keys():
-                sleep(2)
-            else:
-                parsed = output_collector.pop(user)
-                print(parsed)
 
-                return JsonResponse(parsed, safe=False)
+        parsed = look_for_response(user)
+        if parsed is not None:
+            return JsonResponse(parsed, safe=False)
+        else:
+            return JsonResponse({'error_message': 'Не удалось найти книгу по вашему запросу'})
     except Exception as e:
         print(e)
-        data = dict()
-        data['error_message'] = 'Не удалось найти книгу по вашему запросу'
-        return JsonResponse(data)
+        return JsonResponse({'error_message': 'Не удалось найти книгу по вашему запросу'})
 
 
 def create_book(user, isbn_number):
-    request_collector.update({user: str(isbn_number)})
-    book_info = None
+    request_collector.update({user.username: str(isbn_number)})
     try:
-        while True:
-            if user not in output_collector.keys():
-                sleep(2)
-            else:
-                parsed = output_collector.pop(user)
-                break
         current_shelf = Shelf.objects.filter(owner=user).first().get_current_shelf()
         book_info = {'author': '', 'year_of_publication': '',
                      'type_of_cover': '', 'ISBN': '', 'language': '', 'pages': None, }
-        book_info.update(parsed)
-        if current_shelf:
-            book_info.update({'shelf': current_shelf, 'bookcase': current_shelf.bookcase, 'owner': user})
-        if book_info['author']:
-            author = Author.objects.filter(name=book_info['author'], owner=user).first()
-            if author is None:
-                author = Author.objects.create(name=book_info['author'], owner=user)
-            book_info['author'] = author
-            book = Book.objects.create(**book_info)
-            return book
+
+        parsed = look_for_response(user.username)
+        if parsed is None:
+            return f'Не удалось найти данные по запросу'
         else:
-            return f'Не указан автор'
+            book_info.update(parsed)
+            if current_shelf:
+                book_info.update({'shelf': current_shelf, 'bookcase': current_shelf.bookcase, 'owner': user})
+            if book_info['author']:
+                author = Author.objects.filter(name=book_info['author'], owner=user).first()
+                if author is None:
+                    author = Author.objects.create(name=book_info['author'], owner=user)
+                book_info['author'] = author
+                book = Book.objects.create(**book_info)
+                return book
+            else:
+                return f'Не указан автор'
     except Exception as e:
-        print(f'EXPILIARMUS{e}')
-        if not book_info:
-            return f'Не удалось тзвлечь данные по запросу, проблема на стороне источника данных.'
-        else:
-            print(book_info)
-            return f'Необходимо создать шкаф для добавления книг'
+        print(e)
+        return f'Необходимо создать шкаф для добавления книг'
 
 
 def book_from_isbn(request):
     isbn = scan_isbn(request.FILES['barcode'])
+    if isbn is None:
+        messages.warning(request, 'Штрихкод на изображении не удалось распознать')
+        return HttpResponseRedirect(reverse('book-create'))
+
     book = create_book(request.user, isbn)
     if type(book) is Book:
         messages.success(request, 'Книга была успешно добавлена в активную полку!'

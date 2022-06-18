@@ -46,7 +46,7 @@ class OzonSeleniumForeverParser:
 
     @staticmethod
     def get_search_url(search_request):
-        return ("https://www.ozon.ru/api/composer-api.bx/page/json/v2?url=/searchSuggestions/?text="
+        return ("https://www.ozon.ru/api/composer-api.bx/page/json/v2?url=/category/knigi-16500/search/?text="
                 f"{search_request.replace(' ', '+')}")
 
     @staticmethod
@@ -58,13 +58,18 @@ class OzonSeleniumForeverParser:
 
     def parse_product_for_query(self):
         self.browser.get(self.get_search_url(self.search_request))
-        content = self.browser.find_element(By.ID, 'json').text
+        content = self.browser.find_element(By.TAG_NAME, 'body').text
         data = json.loads(content)
         for key, value in data['widgetStates'].items():
-            for item in json.loads(value)['items']:
-                if item['link'].startswith('/product/'):
-                    self.book_info['title'] = item['title'].split('|')[0].strip()
-                    return item['link'].split('/')[-2]
+            if 'searchResultsV2' in key:
+                item = json.loads(value)['items'][0]
+                self.extract_title(item)
+                return item['action']['link'].split('/')[-2]
+
+    def extract_title(self, item):
+        for atom in item['mainState']:
+            if atom['id'] == 'name':
+                self.book_info['title'] = atom['atom']['textAtom']['text'].split('|')[0].strip()
 
     def parse_book_info(self):
         product_parsed_name = self.parse_product_for_query()
@@ -73,7 +78,7 @@ class OzonSeleniumForeverParser:
         content = self.browser.find_element(By.ID, 'json').text
         data = json.loads(content)
         for key, value in data['widgetStates'].items():
-            if all(x in value for x in (product_parsed_name, 'BookType')):
+            if 'webCharacteristics' in key:
                 self.characteristics = json.loads(value)['characteristics'][0]['short']
             if 'richAnnotation' in value:
                 self.book_info['annotation'] = self.remove_html_tags(json.loads(value)['richAnnotation'])
@@ -101,14 +106,21 @@ if __name__ == '__main__':
     # ИТОГОВЫЙ СКРИПТ
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+    # local configuration
     options = Options()
-    # options.headless = True
+    options.headless = True
     browser = webdriver.Firefox(options=options)
+
+    # server configuration
+    # options = webdriver.ChromeOptions()
+    # options.headless = True
+    # options.add_argument("--no-sandbox")
+    # browser = webdriver.Chrome(chrome_options=options, service=Service(ChromeDriverManager().install()))
 
     ParseManager.register('get_request_collector')
     ParseManager.register('get_output_collector')
 
-    reader_manager = ParseManager(address=('127.0.0.1', 50000), authkey=b'qwerasdf')
+    reader_manager = ParseManager(address=('127.0.0.1', 1191), authkey=b'qwerasdf')
     reader_manager.connect()
 
     request_collector = reader_manager.get_request_collector()
@@ -123,8 +135,13 @@ if __name__ == '__main__':
         if request_collector.values():
             request = request_collector.popitem()
             parser = OzonSeleniumForeverParser(request[1], browser)
-            parser.extract_fields()
-            process_request(request[0], parser.book_info)
+
+            try:
+                parser.extract_fields()
+                process_request(request[0], parser.book_info)
+            except Exception as e:
+                process_request(request[0], None)
+                print(e)
         sleep(1)
         print(f'request_collector: {request_collector}')
         pprint(f'output_collector: {output_collector}')
