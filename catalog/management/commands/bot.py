@@ -188,13 +188,11 @@ def add_book(chat_id, update):
     if isbn_number:
         book = create_book(user, isbn_number)
         if type(book) is Book:
-            create_book(user, isbn_number)
             profile = get_profile_or_ask_register(chat_id)
             update.message.reply_text(
-                text='Книга была успешно добавлена в активную полку!'
-                     'Вы можете добавить или изменить информацию о книге.'
-                     f'Книга:\n{get_last_book_info(profile)}, профиль {profile}, {profile.user.username}, '
-                     f'{profile.last_book}',
+                text='Книга была успешно добавлена в активную полку!\n'
+                     'Вы можете добавить или изменить информацию о книге. '
+                     f'\n{get_last_book_info(profile)}',
                 reply_markup=get_search_edit_info_keyboard(profile),
             )
         else:

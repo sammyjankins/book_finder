@@ -72,7 +72,7 @@ class Book(models.Model):
     ISBN = models.CharField(verbose_name='ISBN', max_length=100, default='', blank=True, null=True, )
     type_of_cover = models.CharField(verbose_name='Тип обложки', max_length=25, default='', blank=True)
     read = models.BooleanField(verbose_name='Прочитана', default=False)
-    annotation = models.TextField(default='', blank=True)
+    annotation = models.TextField(default='', blank=True, null=True, )
 
     parse_isbn = models.CharField(verbose_name='Поиск по ISBN', max_length=100, default='', null=True, blank=True)
 

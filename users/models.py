@@ -9,7 +9,7 @@ class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     image = models.ImageField(default='default.jpg', upload_to='profile_pics')
 
-    tele_id = models.CharField(max_length=15, default='', unique=True)
+    tele_id = models.CharField(max_length=15, unique=True, null=True, blank=True)
     last_book = models.ForeignKey(Book, verbose_name='Последняя книга', on_delete=models.SET_NULL, null=True,
                                   default='')
     state = models.IntegerField(default=0)

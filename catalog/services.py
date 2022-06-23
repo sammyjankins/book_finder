@@ -245,7 +245,7 @@ def book_from_isbn(request):
 
     book = create_book(request.user, isbn)
     if type(book) is Book:
-        messages.success(request, 'Книга была успешно добавлена в активную полку!'
+        messages.success(request, 'Книга была успешно добавлена в активную полку!\n'
                                   'Вы можете добавить или изменить информацию о книге.')
         return HttpResponseRedirect(reverse('book-update', args=[book.id]))
     else:
