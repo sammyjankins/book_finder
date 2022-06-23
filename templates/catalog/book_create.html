@@ -20,28 +20,29 @@
 
         <div class="container">
             <h3>Книга</h3>
+
+
+            <br>
+            <h4>Заполните данные автоматически с помощью онлайн поиска</h4>
+            <label for="ISBNp_input">Введите название книги или номер ISBN</label>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" placeholder="Введите данные"
+                       aria-label="Recipient's username" aria-describedby="parse_book_info"
+                       id="ISBNp_input">
+                <button class="btn btn-outline-secondary" type="button" id="parse_book_info">Искать</button>
+            </div>
+            <label for="ISBN_file_upload">Или пришлите фото штрихкода</label>
+            <div class="input-group">
+                <input type="file" class="form-control" id="ISBN_file_upload"
+                       aria-describedby="inputGroupFileAddon04" aria-label="Upload" name="barcode">
+                <button class="btn btn-outline-secondary" type="submit" id="ISBN_file_upload">Искать</button>
+            </div>
+            <br>
+
             <form method="POST" enctype="multipart/form-data">
                 {% csrf_token %}
 
-                <br>
-                <h4>Заполните данные автоматически с помощью онлайн поиска</h4>
-                <label for="ISBNp_input">Введите название книги или номер ISBN</label>
-                <div class="input-group mb-3">
-                    <input type="text" class="form-control" placeholder="Введите данные"
-                           aria-label="Recipient's username" aria-describedby="parse_book_info"
-                           id="ISBNp_input">
-                    <button class="btn btn-outline-secondary" type="button" id="parse_book_info">Искать</button>
-                </div>
 
-
-                <br>
-                <label for="ISBN_file_upload">Или пришлите фото штрихкода</label>
-                <div class="input-group">
-                    <input type="file" class="form-control" id="ISBN_file_upload"
-                           aria-describedby="inputGroupFileAddon04" aria-label="Upload" name="barcode">
-                    <button class="btn btn-outline-secondary" type="submit" id="ISBN_file_upload">Искать</button>
-                </div>
-                <br>
                 <h4 class="mt-3">Или заполните форму самостоятельно</h4>
 
                 <div class="form-group ">
@@ -146,7 +147,16 @@
         <script>
             $parse_button = $("#parse_book_info");
             $parse_input = $("#ISBNp_input");
-            $parse_button.click(function () {
+            $parse_button.click(parse);
+
+            $parse_input.keypress(function (event) {
+                var keycode = (event.keyCode ? event.keyCode : event.which);
+                if (keycode == '13') {
+                    parse();
+                }
+            });
+
+            function parse() {
                 const query = $parse_input.val();
                 $.ajax({
                     type: "POST",
@@ -171,7 +181,7 @@
 
                     }
                 });
-            });
+            }
         </script>
 
         {#        АВТОЗАПОЛНЕНИЕ ===========================================================#}

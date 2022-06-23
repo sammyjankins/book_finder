@@ -10,6 +10,7 @@ from django.urls import reverse
 from pyzbar.pyzbar import decode as p_decode
 
 from catalog.models import Shelf, BookCase, Author, Book
+from catalog.parser import GoogleRequestSearch
 from users.models import Profile
 
 shelf_titles = {
@@ -48,20 +49,6 @@ search_models = {
     'автор': Author,
     'книга': Book,
 }
-
-
-class CQManager(BaseManager):
-    pass
-
-
-CQManager.register('get_request_collector')
-CQManager.register('get_output_collector')
-
-reader_manager = CQManager(address=('127.0.0.1', 1191), authkey=b'qwerasdf')
-reader_manager.connect()
-
-request_collector = reader_manager.get_request_collector()
-output_collector = reader_manager.get_output_collector()
 
 
 def set_owner(request, form):
@@ -169,7 +156,8 @@ def get_shelves_ajax(request):
     try:
         bookcase = BookCase.objects.get(id=bookcase_id)
         shelves = bookcase.shelves
-    except Exception:
+    except Exception as e:
+        print(e)
         data = dict()
         data['error_message'] = 'error'
         return JsonResponse(data)
@@ -181,7 +169,8 @@ def get_book_ajax(request):
     try:
         book = Book.objects.all().filter(title=book_title).first()
         book_dict = model_to_dict(book, fields=[field.name for field in book._meta.fields])
-    except Exception:
+    except Exception as e:
+        print(e)
         data = dict()
         data['error_message'] = 'error'
         return JsonResponse(data)
@@ -198,23 +187,20 @@ def scan_isbn(img_file):
         return None
 
 
-def look_for_response(user):
-    while True:
-        if user not in output_collector.keys():
-            sleep(2)
-        else:
-            return output_collector.pop(user)
+def look_for_response(query):
+    try:
+        searcher = GoogleRequestSearch(query)
+        searcher.search()
+        return searcher.book_info
+    except Exception as e:
+        print(e)
 
 
 def parse_book(request):
     try:
-
-        user = request.user.username
         query = request.POST['query']
-        request_collector.update({user: query})
-        print(request_collector)
 
-        parsed = look_for_response(user)
+        parsed = look_for_response(query)
         if parsed is not None:
             return JsonResponse(parsed, safe=False)
         else:
@@ -225,13 +211,12 @@ def parse_book(request):
 
 
 def create_book(user, isbn_number):
-    request_collector.update({user.username: str(isbn_number)})
     try:
         current_shelf = Shelf.objects.filter(owner=user).first().get_current_shelf()
         book_info = {'author': '', 'year_of_publication': '',
                      'type_of_cover': '', 'ISBN': '', 'language': '', 'pages': None, }
 
-        parsed = look_for_response(user.username)
+        parsed = look_for_response(isbn_number)
         if parsed is None:
             return f'Не удалось найти данные по запросу'
         else:
@@ -288,7 +273,7 @@ def last_book_delete(request, **kwargs):
 
 
 def change_active_shelf(request, **kwargs):
-    new_active = Shelf.objects.exclude(bookcase_id=kwargs['pk']).first()
+    new_active = Shelf.objects.exclude(bookcase_id=kwargs['pk']).filter(owner=request.user).first()
     if new_active:
         new_active.is_current = True
         new_active.save()
