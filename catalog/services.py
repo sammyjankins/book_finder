@@ -1,7 +1,3 @@
-from pprint import pprint
-
-from multiprocessing.managers import BaseManager
-from time import sleep
 from PIL import Image
 from django.contrib import messages
 from django.forms.models import model_to_dict
@@ -106,11 +102,11 @@ def create_shelves(bookcase):
     new_active_shelf(user=bookcase.owner)
 
 
-def owners_objects_queryset(user, Class_, question):
-    objects = Class_.objects.all().filter(owner=user)
+def owners_objects_queryset(user, Class, question=None):
+    objects = Class.objects.all().filter(owner=user)
     if question is not None:
         kwargs = {
-            f'{"name" if Class_ == Author else "title"}__lower__contains': question.lower(), }
+            f'{"name" if Class == Author else "title"}__lower__contains': question.lower(), }
         objects = objects.filter(**kwargs)
 
     return objects.order_by('-id')
@@ -129,8 +125,8 @@ def get_unread_queryset(request):
 
 
 def global_queryset(request):
-    objects = {key: owners_objects_queryset(request.user, Class_=Class_, question=request.GET.get('q'))
-               for key, Class_ in {'bookcase': BookCase, 'author': Author, 'book': Book}.items()}
+    objects = {key: owners_objects_queryset(request.user, Class=Class, question=request.GET.get('q'))
+               for key, Class in {'bookcase': BookCase, 'author': Author, 'book': Book}.items()}
 
     return objects
 
