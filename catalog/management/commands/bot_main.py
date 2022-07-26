@@ -55,23 +55,31 @@ def answer(update: Update, context: CallbackContext):
 
     profile = bot_logic.get_profile_or_none(chat_id)
     if profile:
-        if profile.state == 0:
-            reply_text = 'Выберите действие:'
-            update.message.reply_text(
-                text=reply_text,
-                reply_markup=keyboards.get_add_keyboard() if bot_logic.get_profile_or_none(
-                    chat_id).last_book else keyboards.get_nolastbook_keyboard(), )
-        elif profile.state == 1:
-            search_answer(chat_id, update)
-            bot_logic.get_profile_or_none(chat_id).set_dialog_state(0)
-        elif profile.state == 2:
-            add_book(chat_id, update)
-            bot_logic.get_profile_or_none(chat_id).set_dialog_state(0)
-        elif profile.state == 3:
-            add_books(chat_id, update, context.bot)
+        if bot_logic.get_current_shelf(chat_id):
+            if profile.state == 0:
+                reply_text = 'Выберите действие:'
+                update.message.reply_text(
+                    text=reply_text,
+                    reply_markup=keyboards.get_add_keyboard() if bot_logic.get_profile_or_none(
+                        chat_id).last_book else keyboards.get_nolastbook_keyboard(), )
+            elif profile.state == 1:
+                search_answer(chat_id, update)
+                bot_logic.get_profile_or_none(chat_id).set_dialog_state(0)
+            elif profile.state == 2:
+                add_book(chat_id, update)
+                bot_logic.get_profile_or_none(chat_id).set_dialog_state(0)
+            elif profile.state == 3:
+                add_books(chat_id, update, context.bot)
+        else:
+            context.bot.send_message(
+                chat_id=chat_id,
+                text="Для использования основных возможностей бота в вашем профиле должен быть хотя "
+                     "бы один книжный шкаф. Для создания книжного шкафа перейдите на сайт.",
+                reply_markup=keyboards.get_no_shelf_keyboard(), )
     else:
-        reply_text = ('Для продолжения работы необходимо зарегистрироваться на сайте и заполнить базу данных. '
-                      'Если вы уже зарегистрированы, привяжите ваш телеграм к базе данных.')
+        reply_text = ('Для продолжения работы необходимо зарегистрироваться на сайте. '
+                      'Если вы уже зарегистрированы, привяжите ваш телеграм к базе данных. '
+                      'Для продолжения нажмите "Готово".')
         update.message.reply_text(
             text=reply_text,
             reply_markup=keyboards.get_register_keyboard(chat_id),
@@ -282,49 +290,57 @@ def keyboard_callback_handler(update: Update, context: CallbackContext):
 
     profile = bot_logic.get_profile_or_none(chat_id)
     if profile:
-
-        if data == keyboards.CB_NEW_BOOK:
-            callback_new_book(context.bot, chat_id)
-        if data == keyboards.CB_NEW_BOOK_GROUP:
-            callback_new_book_group(context.bot, chat_id)
-
-        else:
-            if profile.last_book is not None:
-                if data == keyboards.CB_SEARCH:
-                    callback_search(context.bot, chat_id)
-                if data == keyboards.CB_PROFILE_INFO:
-                    callback_profile_info(context.bot, chat_id)
-                if data == keyboards.CB_FAV:
-                    callback_fav(query, chat_id)
-                if data == keyboards.CB_READ:
-                    callback_read(query, chat_id)
-                if data == keyboards.CB_BACK:
-                    callback_back(context.bot, chat_id)
-                if data == keyboards.CB_DONE:
-                    callback_done(context.bot, chat_id)
-                if data == keyboards.CB_DELETE:
-                    callback_delete(context.bot, chat_id)
-                    callback_back(context.bot, chat_id)
-                if data == keyboards.CB_NEW_CURRENT_SHELF:
-                    callback_new_active_shelf(context.bot, chat_id)
-                if keyboards.CB_SHELVES in data:
-                    bookcase_id = data.split('-')[-1]
-                    callback_shelf_list(context.bot, chat_id, bookcase_id)
-                if keyboards.CB_SHELF_SELECT in data:
-                    shelf_id = data.split('-')[-1]
-                    callback_shelf_select(query, chat_id, shelf_id)
-                if data == keyboards.CB_BOOK_INFO:
-                    callback_book_info(context.bot, chat_id)
-                elif keyboards.CB_BOOK_INFO in data:
-                    book_id = data.split('-')[-1]
-                    callback_book_info(context.bot, chat_id, book_id=book_id)
+        if bot_logic.get_current_shelf(chat_id):
+            if data == keyboards.CB_BINDED:
+                callback_back(context.bot, chat_id)
+            elif data == keyboards.CB_PROFILE_INFO:
+                callback_profile_info(context.bot, chat_id)
+            elif data == keyboards.CB_NEW_BOOK:
+                callback_new_book(context.bot, chat_id)
+            elif data == keyboards.CB_NEW_BOOK_GROUP:
+                callback_new_book_group(context.bot, chat_id)
+            elif data == keyboards.CB_NEW_CURRENT_SHELF:
+                callback_new_active_shelf(context.bot, chat_id)
+            elif keyboards.CB_SHELVES in data:
+                bookcase_id = data.split('-')[-1]
+                callback_shelf_list(context.bot, chat_id, bookcase_id)
+            elif keyboards.CB_SHELF_SELECT in data:
+                shelf_id = data.split('-')[-1]
+                callback_shelf_select(query, chat_id, shelf_id)
             else:
-                context.bot.send_message(
-                    chat_id=chat_id,
-                    text="В вашей библиотеке нет книг. Вы можете добавить книги в библиотеку с помощью данного бота.",
-                    reply_markup=keyboards.get_nolastbook_keyboard(),
-                )
-
+                if profile.last_book is not None:
+                    if data == keyboards.CB_SEARCH:
+                        callback_search(context.bot, chat_id)
+                    if data == keyboards.CB_FAV:
+                        callback_fav(query, chat_id)
+                    if data == keyboards.CB_READ:
+                        callback_read(query, chat_id)
+                    if data == keyboards.CB_BACK:
+                        callback_back(context.bot, chat_id)
+                    if data == keyboards.CB_DONE:
+                        callback_done(context.bot, chat_id)
+                    if data == keyboards.CB_DELETE:
+                        callback_delete(context.bot, chat_id)
+                        callback_back(context.bot, chat_id)
+                    if data == keyboards.CB_BOOK_INFO:
+                        callback_book_info(context.bot, chat_id)
+                    elif keyboards.CB_BOOK_INFO in data:
+                        book_id = data.split('-')[-1]
+                        callback_book_info(context.bot, chat_id, book_id=book_id)
+                else:
+                    context.bot.send_message(
+                        chat_id=chat_id,
+                        text="В вашей библиотеке нет книг. Вы можете добавить книги в библиотеку с помощью "
+                             "данного бота.",
+                        reply_markup=keyboards.get_nolastbook_keyboard(),
+                    )
+        else:
+            context.bot.send_message(
+                chat_id=chat_id,
+                text="Для использования основных возможностей бота в вашем профиле должен быть хотя "
+                     "бы один книжный шкаф. Для создания книжного шкафа перейдите на сайт.",
+                reply_markup=keyboards.get_no_shelf_keyboard(),
+            )
     else:
         context.bot.send_message(
             chat_id=chat_id,

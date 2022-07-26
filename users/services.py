@@ -34,7 +34,7 @@ def bind_tele_id(request, **kwargs):
             binded.save()
         profile.tele_id = kwargs['tele_id']
         profile.save()
-        print(profile)
+        messages.success(request, f'Телеграм {profile.tele_id} привязан к профилю {request.user.username}!')
     u_form = UserUpdateForm(request.POST, instance=request.user)
     p_form = ProfileUpdateForm(request.POST,
                                request.FILES,

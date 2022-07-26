@@ -4,11 +4,8 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 
+import catalog.services as logic
 from catalog.models import BookCase, Shelf, Author, Book, Note
-from catalog.services import owners_objects_queryset, set_owner, check_owership, get_queryset_for_book_create, \
-    get_queryset_for_book_update, get_shelves_ajax, new_author, get_book_ajax, global_queryset, new_active_shelf, \
-    parse_book, book_from_isbn, get_favorite_queryset, check_author, swap_favorite, get_read_queryset, \
-    get_unread_queryset, swap_read, last_book_delete, change_active_shelf
 
 
 class BookcaseListView(ListView):
@@ -18,7 +15,7 @@ class BookcaseListView(ListView):
     paginate_by = 10
 
     def get_queryset(self, *args, **kwargs):
-        return owners_objects_queryset(self.request.user, BookCase, question=self.request.GET.get('q'))
+        return logic.owners_objects_queryset(self.request.user, BookCase, question=self.request.GET.get('q'))
 
 
 class AuthorListView(ListView):
@@ -28,7 +25,7 @@ class AuthorListView(ListView):
     paginate_by = 10
 
     def get_queryset(self, *args, **kwargs):
-        return owners_objects_queryset(self.request.user, Author, question=self.request.GET.get('q'))
+        return logic.owners_objects_queryset(self.request.user, Author, question=self.request.GET.get('q'))
 
 
 class BookListView(ListView):
@@ -38,7 +35,7 @@ class BookListView(ListView):
     paginate_by = 10
 
     def get_queryset(self, *args, **kwargs):
-        return owners_objects_queryset(self.request.user, Book, question=self.request.GET.get('q'))
+        return logic.owners_objects_queryset(self.request.user, Book, question=self.request.GET.get('q'))
 
 
 class FavoriteListView(ListView):
@@ -48,7 +45,7 @@ class FavoriteListView(ListView):
     paginate_by = 10
 
     def get_queryset(self, *args, **kwargs):
-        return get_favorite_queryset(self.request)
+        return logic.get_favorite_queryset(self.request)
 
 
 class ReadListView(ListView):
@@ -58,7 +55,7 @@ class ReadListView(ListView):
     paginate_by = 10
 
     def get_queryset(self, *args, **kwargs):
-        return get_read_queryset(self.request)
+        return logic.get_read_queryset(self.request)
 
 
 class UnreadListView(ListView):
@@ -68,7 +65,7 @@ class UnreadListView(ListView):
     paginate_by = 10
 
     def get_queryset(self, *args, **kwargs):
-        return get_unread_queryset(self.request)
+        return logic.get_unread_queryset(self.request)
 
 
 class SearchListView(ListView):
@@ -77,35 +74,35 @@ class SearchListView(ListView):
     context_object_name = 'results'
 
     def get_queryset(self, *args, **kwargs):
-        return global_queryset(self.request)
+        return logic.global_queryset(self.request)
 
 
 class BookcaseDetailView(UserPassesTestMixin, DetailView):
     model = BookCase
 
     def test_func(self):
-        return check_owership(self)
+        return logic.check_owership(self)
 
 
 class ShelfDetailView(UserPassesTestMixin, DetailView):
     model = Shelf
 
     def test_func(self):
-        return check_owership(self)
+        return logic.check_owership(self)
 
 
 class AuthorDetailView(UserPassesTestMixin, DetailView):
     model = Author
 
     def test_func(self):
-        return check_owership(self)
+        return logic.check_owership(self)
 
 
 class BookDetailView(UserPassesTestMixin, DetailView):
     model = Book
 
     def test_func(self):
-        return check_owership(self)
+        return logic.check_owership(self)
 
 
 class BookcaseCreateView(CreateView):
@@ -113,7 +110,7 @@ class BookcaseCreateView(CreateView):
     fields = ['title', 'shelf_count', 'section_count', 'row_count', ]
 
     def form_valid(self, form):
-        set_owner(self.request, form)
+        logic.set_owner(self.request, form)
         return super().form_valid(form)
 
 
@@ -122,7 +119,7 @@ class AuthorCreateView(CreateView):
     fields = ['name', 'date_of_birth', 'country', ]
 
     def form_valid(self, form):
-        set_owner(self.request, form)
+        logic.set_owner(self.request, form)
         return super().form_valid(form)
 
 
@@ -135,20 +132,20 @@ class BookCreateView(CreateView):
 
     def post(self, request, **kwargs):
         if request.FILES:
-            return book_from_isbn(request)
-        if not check_author(request):
+            return logic.book_from_isbn(request)
+        if not logic.check_author(request):
             messages.warning(request, 'Автор не указан!')
             return HttpResponseRedirect(reverse('book-create'))
         return super(BookCreateView, self).post(request, **kwargs)
 
     def form_valid(self, form):
-        set_owner(self.request, form)
-        new_author(self.request, form)
+        logic.set_owner(self.request, form)
+        logic.new_author(self.request, form)
         return super().form_valid(form)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        return get_queryset_for_book_create(self.request, ctx)
+        return logic.get_queryset_for_book_create(self.request, ctx)
 
 
 class NoteCreateView(CreateView):
@@ -157,7 +154,7 @@ class NoteCreateView(CreateView):
     template_name = 'catalog/book_detail.html'
 
     def form_valid(self, form):
-        set_owner(self.request, form)
+        logic.set_owner(self.request, form)
         return super().form_valid(form)
 
 
@@ -166,7 +163,7 @@ class BookcaseUpdateView(UserPassesTestMixin, UpdateView):
     fields = ['title', ]
 
     def test_func(self):
-        return check_owership(self)
+        return logic.check_owership(self)
 
 
 class ShelfUpdateView(UserPassesTestMixin, UpdateView):
@@ -174,7 +171,7 @@ class ShelfUpdateView(UserPassesTestMixin, UpdateView):
     fields = ['title', ]
 
     def test_func(self):
-        return check_owership(self)
+        return logic.check_owership(self)
 
     def form_valid(self, form):
         return super().form_valid(form)
@@ -185,7 +182,7 @@ class AuthorUpdateView(UserPassesTestMixin, UpdateView):
     fields = ['name', 'date_of_birth', 'country', ]
 
     def test_func(self):
-        return check_owership(self)
+        return logic.check_owership(self)
 
 
 class BookUpdateView(UserPassesTestMixin, UpdateView):
@@ -196,15 +193,15 @@ class BookUpdateView(UserPassesTestMixin, UpdateView):
     template_name = 'catalog/book_update.html'
 
     def test_func(self):
-        return check_owership(self)
+        return logic.check_owership(self)
 
     def form_valid(self, form):
-        new_author(self.request, form)
+        logic.new_author(self.request, form)
         return super().form_valid(form)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        return get_queryset_for_book_update(self.request, self.object, ctx)
+        return logic.get_queryset_for_book_update(self.request, self.object, ctx)
 
 
 class NoteUpdateView(UserPassesTestMixin, UpdateView):
@@ -213,7 +210,7 @@ class NoteUpdateView(UserPassesTestMixin, UpdateView):
     template_name = 'catalog/book_detail.html'
 
     def test_func(self):
-        return check_owership(self)
+        return logic.check_owership(self)
 
     def get_success_url(self):
         return reverse('book-detail', kwargs={'pk': self.get_object().book.pk})
@@ -224,10 +221,10 @@ class BookcaseDeleteView(UserPassesTestMixin, DeleteView):
     success_url = '/'
 
     def test_func(self):
-        return check_owership(self)
+        return logic.check_owership(self)
 
     def post(self, request, *args, **kwargs):
-        change_active_shelf(request, **kwargs)
+        logic.change_active_shelf(request, **kwargs)
         return super(BookcaseDeleteView, self).post(request, **kwargs)
 
 
@@ -236,7 +233,7 @@ class AuthorDeleteView(UserPassesTestMixin, DeleteView):
     success_url = '/author/all'
 
     def test_func(self):
-        return check_owership(self)
+        return logic.check_owership(self)
 
 
 class BookDeleteView(UserPassesTestMixin, DeleteView):
@@ -244,10 +241,10 @@ class BookDeleteView(UserPassesTestMixin, DeleteView):
     success_url = '/book/all'
 
     def test_func(self):
-        return check_owership(self)
+        return logic.check_owership(self)
 
     def post(self, request, *args, **kwargs):
-        last_book_delete(request, **kwargs)
+        logic.last_book_delete(request, **kwargs)
         return super(BookDeleteView, self).post(request, **kwargs)
 
 
@@ -255,7 +252,7 @@ class NoteDeleteView(UserPassesTestMixin, DeleteView):
     model = Note
 
     def test_func(self):
-        return check_owership(self)
+        return logic.check_owership(self)
 
     def get_success_url(self):
         return reverse('book-detail', kwargs={'pk': self.get_object().book.pk})
@@ -266,29 +263,29 @@ class NoteDeleteView(UserPassesTestMixin, DeleteView):
 
 def get_shelves_ajax_view(request):
     if request.method == "POST":
-        return get_shelves_ajax(request)
+        return logic.get_shelves_ajax(request)
 
 
 def get_book_ajax_view(request):
     if request.method == "POST":
-        return get_book_ajax(request)
+        return logic.get_book_ajax(request)
 
 
 def parse_book_view(request):
     if request.method == "POST":
-        return parse_book(request)
+        return logic.parse_book(request)
 
 
 def swap_favorite_view(request, **kwargs):
-    swap_favorite(kwargs)
+    logic.swap_favorite(kwargs)
     return HttpResponseRedirect(reverse('book-detail', kwargs={'pk': kwargs['pk']}))
 
 
 def swap_read_view(request, **kwargs):
-    swap_read(kwargs)
+    logic.swap_read(kwargs)
     return HttpResponseRedirect(reverse('book-detail', kwargs={'pk': kwargs['pk']}))
 
 
 def new_active_shelf_view(request, **kwargs):
-    new_active_shelf(user=request.user, kwargs=kwargs)
+    logic.new_active_shelf(user=request.user, kwargs=kwargs)
     return HttpResponseRedirect(reverse('shelf-detail', kwargs={'pk': kwargs['pk']}))

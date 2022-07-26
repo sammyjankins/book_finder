@@ -18,6 +18,7 @@ CB_SHELVES = "callback_button_shelves"
 CB_PROFILE_INFO = "callback_button_profile_info"
 CB_REGISTER = "callback_button_register"
 CB_BIND = "callback_button_bind"
+CB_BINDED = "callback_button_binded"
 CB_SITE = "callback_button_site"
 CB_FAV = "callback_button_fav"
 CB_READ = "callback_button_read"
@@ -32,6 +33,7 @@ TITLES = {
     CB_NEW_BOOK_GROUP: "Добавить несколько книг",
     CB_NEW_BOOKCASE: "Добавить шкаф (сайт)",
     CB_NEW_CURRENT_SHELF: "Изменить активную полку",
+    CB_BINDED: "Готово",
     CB_BOOKCASE_LIST: "Список шкафов",
     CB_BOOK: "Открыть на сайте",
     CB_BOOK_INFO: "Последняя книга (инфо)",
@@ -141,8 +143,20 @@ def get_register_keyboard(chat_id):
                                  callback_data=CB_BIND),
         ],
         [
-            InlineKeyboardButton(TITLES[CB_SITE], callback_data=CB_SITE,
-                                 url=f'{os.environ.get("MY_CURRENT_URL")}', ),
+            InlineKeyboardButton(TITLES[CB_BINDED],
+                                 callback_data=CB_BINDED),
+        ],
+
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_no_shelf_keyboard():
+    keyboard = [
+        [
+            InlineKeyboardButton(TITLES[CB_NEW_BOOKCASE],
+                                 url=f'{os.environ.get("MY_CURRENT_URL")}bookcase/new/',
+                                 callback_data=CB_NEW_BOOKCASE),
         ],
 
     ]

@@ -33,16 +33,16 @@ NUM_WORDS = {
 }
 
 BOOK_INFO_KEYS = {
-        'title': 'Книга: ',
-        'author': 'Автор: ',
-        'ISBN': 'ISBN: ',
-        'year_of_publication': 'Год публикации: ',
-        'pages': 'Страниц: ',
-        'type_of_cover': 'Тип обложки: ',
-        'language': 'Язык: ',
-        'bookcase': 'Шкаф: ',
-        'shelf': 'Местоположение: ',
-    }
+    'title': 'Книга: ',
+    'author': 'Автор: ',
+    'ISBN': 'ISBN: ',
+    'year_of_publication': 'Год публикации: ',
+    'pages': 'Страниц: ',
+    'type_of_cover': 'Тип обложки: ',
+    'language': 'Язык: ',
+    'bookcase': 'Шкаф: ',
+    'shelf': 'Местоположение: ',
+}
 
 
 def get_last_book(chat_id):
