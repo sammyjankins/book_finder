@@ -8,7 +8,7 @@
             <div class="alert alert-danger">
                 <h4>Ошибка:</h4>
                 {% for error in errors %}
-                    <p>{{ error|first }} - {{ error|last }}</p>
+                    <p>Ошибка заполнения в поле - {{ error }}</p>
                 {% endfor %}
             </div>
         {% endif %}
