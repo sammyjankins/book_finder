@@ -134,6 +134,12 @@ def add_book(chat_id, update):
                 reply_markup=keyboards.get_add_keyboard()
 
             )
+    else:
+        update.message.reply_text(
+            text="Не найден ISBN на фото",
+            reply_markup=keyboards.get_add_keyboard()
+
+        )
 
 
 def add_books(chat_id, update, bot):
