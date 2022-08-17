@@ -218,7 +218,7 @@ def create_book(user, isbn_number):
         else:
             book_info.update(parsed)
             if current_shelf:
-                book_info.update({'shelf': current_shelf, 'bookcase': current_shelf.bookcase, 'owner': user})
+                book_info.update({'shelf': current_shelf, 'owner': user})
             if book_info['author']:
                 author = Author.objects.filter(name=book_info['author'], owner=user).first()
                 if author is None:
