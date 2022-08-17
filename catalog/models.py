@@ -21,6 +21,12 @@ class BookCase(models.Model):
     def get_absolute_url(self):
         return reverse('bookcase-detail', kwargs={'pk': self.pk})
 
+    def get_book_count(self):
+        books = 0
+        for shelf in self.shelves.all():
+            books += shelf.book_set.all().count()
+        return books
+
 
 class Shelf(models.Model):
     title = models.CharField(verbose_name='Название', max_length=100)
@@ -76,7 +82,6 @@ class Book(models.Model):
 
     parse_isbn = models.CharField(verbose_name='Поиск по ISBN', max_length=100, default='', null=True, blank=True)
 
-    bookcase = models.ForeignKey(BookCase, verbose_name='Книжный шкаф', on_delete=models.CASCADE, )
     shelf = models.ForeignKey(Shelf, verbose_name='Полка', on_delete=models.CASCADE, )
     author = models.ForeignKey(Author, verbose_name='Автор', on_delete=models.CASCADE, )
     new_author = models.CharField(verbose_name='Новый автор', max_length=150, null=True, blank=True)

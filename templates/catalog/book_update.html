@@ -60,7 +60,7 @@
                         <div class="form-group">
                             <label for="bookcase_input">Книжный шкаф</label>
                             <select id="bookcase_input" class="form-control-sm custom-select" name="bookcase">
-                                <option value="{{ book.bookcase.id }}">{{ book.bookcase.title }}</option>
+                                <option value="{{ book.shelf.bookcase.id }}">{{ book.shelf.bookcase.title }}</option>
                                 {% for item in bookcase %}
                                     <option value="{{ item.id }}">{{ item.title }}</option>
                                 {% endfor %}

@@ -40,8 +40,6 @@ BOOK_INFO_KEYS = {
     'pages': 'Страниц: ',
     'type_of_cover': 'Тип обложки: ',
     'language': 'Язык: ',
-    'bookcase': 'Шкаф: ',
-    'shelf': 'Местоположение: ',
 }
 
 
@@ -62,6 +60,7 @@ def get_book_info(chat_id, book_id=None):
 
     book_info = '\n'.join([f'{BOOK_INFO_KEYS[key]}{getattr(book, key)}'
                            for key in BOOK_INFO_KEYS if getattr(book, key) is not None])
+    book_info = f'{book_info}\nШкаф: {book.shelf.bookcase.title}\nМестоположение: {book.shelf}'
     f, r = book.favorite, book.read
     star, check, newline = '\u2B50', '\u2705', '\n'
     book_info = f"{star * f}{check * r}{newline * (f or r)}{book_info}"
@@ -136,7 +135,7 @@ def process_search_query(chat_id, query):
     profile = get_profile_or_none(chat_id)
     result = services.owners_objects_queryset(profile.user.id, Book, query).first()
     if result:
-        bookcase = result.bookcase.title
+        bookcase = result.shelf.bookcase.title
         shelf = result.shelf.title
         row = result.shelf.row
         author = result.author.name

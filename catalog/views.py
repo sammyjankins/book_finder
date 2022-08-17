@@ -127,7 +127,7 @@ class BookCreateView(CreateView):
     model = Book
     context_object_name = 'objects'
     fields = ['title', 'pages', 'year_of_publication', 'language',
-              'ISBN', 'type_of_cover', 'parse_isbn', 'bookcase', 'shelf', 'new_author', 'annotation', ]
+              'ISBN', 'type_of_cover', 'parse_isbn', 'shelf', 'new_author', 'annotation', ]
     template_name = 'catalog/book_create.html'
 
     def post(self, request, **kwargs):
@@ -189,7 +189,7 @@ class BookUpdateView(UserPassesTestMixin, UpdateView):
     model = Book
     context_object_name = 'objects'
     fields = ['title', 'pages', 'year_of_publication', 'language',
-              'ISBN', 'type_of_cover', 'bookcase', 'shelf', 'new_author', 'annotation', ]
+              'ISBN', 'type_of_cover', 'shelf', 'new_author', 'annotation', ]
     template_name = 'catalog/book_update.html'
 
     def test_func(self):

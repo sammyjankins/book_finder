@@ -19,7 +19,7 @@
 
                         <a class="list-group-item list-group-item-action"
                            href="{% url 'bookcase-detail' bookcase.id %}">
-                            {{ bookcase.title }} - {{ bookcase.book_set.all|length }} книг
+                            {{ bookcase.title }} - {{ bookcase.get_book_count }} книг
                         </a>
                     {% endfor %}
 
