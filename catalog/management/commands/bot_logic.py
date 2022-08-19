@@ -141,9 +141,9 @@ def process_search_query(chat_id, query):
         author = result.author.name
         profile.last_book = result
         profile.save()
-        return f'Книга - {result}, автор - {author}, шкаф: {bookcase}, {shelf}, {row} ряд'
+        return [True, f'Книга - {result}, автор - {author}, шкаф: {bookcase}, {shelf}, {row} ряд']
     else:
-        return f'По запросу "{query}" не найдено не одной книги в вашей библиотеке'
+        return [False, f'По запросу "{query}" не найдено не одной книги в вашей библиотеке']
 
 
 def voice_search(file, chat_id, answer_path):

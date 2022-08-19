@@ -99,9 +99,12 @@ def search_answer(chat_id, update):
         )
 
     elif update.message.text is not None:
+        result = bot_logic.process_search_query(chat_id, update.message.text)
+        text = result[1]
+        keyboard = keyboards.get_search_edit_info_keyboard(chat_id) if result[0] else keyboards.get_back_keyboard()
         update.message.reply_text(
-            text=bot_logic.process_search_query(chat_id, update.message.text),
-            reply_markup=keyboards.get_search_edit_info_keyboard(chat_id)
+            text=text,
+            reply_markup=keyboard,
         )
 
     else:
