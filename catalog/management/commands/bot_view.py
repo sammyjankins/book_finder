@@ -57,18 +57,17 @@ def get_search_edit_info_keyboard(chat_id):
             InlineKeyboardButton(TITLES[CB_BOOK],
                                  url=f'{os.environ.get("MY_CURRENT_URL")}book/{last_book.id}/',
                                  callback_data=CB_BOOK),
-            InlineKeyboardButton(TITLES[CB_BOOK_INFO], callback_data=CB_BOOK_INFO),
+            InlineKeyboardButton(TITLES[CB_SEARCH], callback_data=CB_SEARCH),
         ],
         [
             InlineKeyboardButton(f'{TITLES[CB_FAV]}{star * last_book.favorite}', callback_data=CB_FAV),
             InlineKeyboardButton(f'{TITLES[CB_READ]}{check * last_book.read}', callback_data=CB_READ),
         ],
         [
-            InlineKeyboardButton(TITLES[CB_SEARCH], callback_data=CB_SEARCH),
+            InlineKeyboardButton(TITLES[CB_PROFILE_INFO], callback_data=CB_PROFILE_INFO),
             InlineKeyboardButton(TITLES[CB_DELETE], callback_data=CB_DELETE),
         ],
         [
-            InlineKeyboardButton(TITLES[CB_PROFILE_INFO], callback_data=CB_PROFILE_INFO),
             InlineKeyboardButton(TITLES[CB_BACK], callback_data=CB_BACK),
         ],
 
