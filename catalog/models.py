@@ -80,8 +80,6 @@ class Book(models.Model):
     read = models.BooleanField(verbose_name='Прочитана', default=False)
     annotation = models.TextField(default='', blank=True, null=True, )
 
-    parse_isbn = models.CharField(verbose_name='Поиск по ISBN', max_length=100, default='', null=True, blank=True)
-
     shelf = models.ForeignKey(Shelf, verbose_name='Полка', on_delete=models.CASCADE, )
     author = models.ForeignKey(Author, verbose_name='Автор', on_delete=models.CASCADE, )
     new_author = models.CharField(verbose_name='Новый автор', max_length=150, null=True, blank=True)
