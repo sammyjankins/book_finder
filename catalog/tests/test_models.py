@@ -3,7 +3,7 @@ from unittest.mock import Mock
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from catalog.models import Author, BookCase, Shelf, Book
+from catalog.models import Author, BookCase, Shelf, Book, Note
 
 
 class BookCaseTest(TestCase):
@@ -139,9 +139,9 @@ class BookModelTest(TestCase):
     @classmethod
     def setUpTestData(cls):
         user = User.objects.create(username='username', password='12345')
-        cls.bookcase = BookCase.objects.create(title='Bedroom bookcase', shelf_count=2, section_count=2, row_count=2,
-                                               owner=user)
-        cls.shelf = Shelf.objects.last()
+        BookCase.objects.create(title='Bedroom bookcase', shelf_count=2, section_count=2, row_count=2,
+                                owner=user)
+        shelf = Shelf.objects.last()
         author = Author.objects.filter(name='John Fowles', owner=user).first()
         if author is None:
             author = Author.objects.create(name='John Fowles', owner=user)
@@ -151,7 +151,7 @@ class BookModelTest(TestCase):
                                                   'in the deceptions of a master trickster. Fowles unfolds a tale '
                                                   'that is lush with over-powering imagery in a spellbinding '
                                                   'exploration of the complexities of the human mind.',
-                                       shelf=cls.shelf, author=author, favorite=False, owner=user)
+                                       shelf=shelf, author=author, favorite=False, owner=user)
 
     def test_title_label(self):
         field_label = self.book._meta.get_field('title').verbose_name
@@ -165,11 +165,9 @@ class BookModelTest(TestCase):
         field_label = self.book._meta.get_field('year_of_publication').verbose_name
         self.assertEquals(field_label, 'Год издания')
 
-
     def test_language_label(self):
         field_label = self.book._meta.get_field('language').verbose_name
         self.assertEquals(field_label, 'Язык')
-
 
     def test_ISBN_label(self):
         field_label = self.book._meta.get_field('ISBN').verbose_name
@@ -182,6 +180,26 @@ class BookModelTest(TestCase):
     def test_read_label(self):
         field_label = self.book._meta.get_field('read').verbose_name
         self.assertEquals(field_label, 'Прочитана')
+
+    def test_annotation_label(self):
+        field_label = self.book._meta.get_field('annotation').verbose_name
+        self.assertEquals(field_label, 'Аннотация')
+
+    def test_shelf_label(self):
+        field_label = self.book._meta.get_field('shelf').verbose_name
+        self.assertEquals(field_label, 'Полка')
+
+    def test_author_label(self):
+        field_label = self.book._meta.get_field('author').verbose_name
+        self.assertEquals(field_label, 'Автор')
+
+    def test_new_author_label(self):
+        field_label = self.book._meta.get_field('new_author').verbose_name
+        self.assertEquals(field_label, 'Новый автор')
+
+    def test_favorite_label(self):
+        field_label = self.book._meta.get_field('favorite').verbose_name
+        self.assertEquals(field_label, 'Избранное')
 
     def test_title_max_length(self):
         max_length = self.book._meta.get_field('title').max_length
@@ -202,3 +220,31 @@ class BookModelTest(TestCase):
     def test_type_of_cover_max_length(self):
         max_length = self.book._meta.get_field('type_of_cover').max_length
         self.assertEquals(max_length, 25)
+
+    def test_new_author_max_length(self):
+        max_length = self.book._meta.get_field('new_author').max_length
+        self.assertEquals(max_length, 150)
+
+    def test_str_method(self):
+        self.assertEquals(str(self.book), self.book.title)
+
+    def test_get_absolute_url(self):
+        self.assertEquals(self.book.get_absolute_url(), f'/book/{self.book.pk}/')
+
+
+class NoteModelTest(TestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        user = User.objects.create(username='username', password='12345')
+        BookCase.objects.create(title='Random bookcase', shelf_count=1, section_count=1, row_count=1,
+                                owner=user)
+        shelf = Shelf.objects.first()
+        author = Author.objects.filter(name='John Smith', owner=user).first()
+        if author is None:
+            author = Author.objects.create(name='John Smith', owner=user)
+        cls.book = Book.objects.create(title='The Ipsum', shelf=shelf, author=author, favorite=False, owner=user)
+        cls.note = Note.objects.create(text='Bonbon marshmallow gummi bears icing tart marshmallow lollipop gummies. '
+                                            'Halvah shortbread cake lemon drops oat cake lollipop candy. Dragée candy '
+                                            'jelly donut brownie.',
+                                       book=cls.book, owner=user)

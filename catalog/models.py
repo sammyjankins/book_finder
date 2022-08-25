@@ -95,7 +95,7 @@ class Book(models.Model):
 
 
 class Note(models.Model):
-    text = models.TextField(default='', blank=True)
+    text = models.TextField(verbose_name='Заметка', default='', blank=True)
     book = models.ForeignKey(Book, verbose_name='Книга', on_delete=models.CASCADE, )
     owner = models.ForeignKey('auth.User', on_delete=models.CASCADE)
 
