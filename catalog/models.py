@@ -78,7 +78,7 @@ class Book(models.Model):
     ISBN = models.CharField(verbose_name='ISBN', max_length=100, default='', blank=True, null=True, )
     type_of_cover = models.CharField(verbose_name='Тип обложки', max_length=25, default='', blank=True)
     read = models.BooleanField(verbose_name='Прочитана', default=False)
-    annotation = models.TextField(default='', blank=True, null=True, )
+    annotation = models.TextField(verbose_name='Аннотация', default='', blank=True, null=True, )
 
     shelf = models.ForeignKey(Shelf, verbose_name='Полка', on_delete=models.CASCADE, )
     author = models.ForeignKey(Author, verbose_name='Автор', on_delete=models.CASCADE, )
