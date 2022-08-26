@@ -1,5 +1,3 @@
-from unittest.mock import Mock
-
 from django.contrib.auth.models import User
 from django.test import TestCase
 
@@ -33,11 +31,6 @@ class BookCaseTest(TestCase):
         max_length = self.bookcase._meta.get_field('title').max_length
         self.assertEquals(max_length, 100)
 
-    def test_created_shelves(self):
-        shelves = Shelf.objects.filter(bookcase=self.bookcase)
-        expected_count = self.bookcase.shelf_count * self.bookcase.section_count * self.bookcase.row_count
-        self.assertEquals(expected_count, shelves.count())
-
     def test_get_absolute_url(self):
         self.assertEquals(self.bookcase.get_absolute_url(), f'/bookcase/{self.bookcase.pk}/')
 
@@ -50,7 +43,7 @@ class ShelfTest(TestCase):
     @classmethod
     def setUpTestData(cls):
         user = User.objects.create(username='username', password='12345')
-        BookCase.objects.create(title='Sci-Fi', shelf_count=2, section_count=2, row_count=2, owner=user)
+        cls.bookcase = BookCase.objects.create(title='Sci-Fi', shelf_count=2, section_count=2, row_count=2, owner=user)
         cls.shelf = Shelf.objects.last()
 
     def test_title_label(self):
@@ -88,6 +81,11 @@ class ShelfTest(TestCase):
             if shelf.is_current:
                 current += 1
         self.assertEquals(current, 1)
+
+    def test_created_shelves(self):
+        shelves = Shelf.objects.filter(bookcase=self.bookcase)
+        expected_count = self.bookcase.shelf_count * self.bookcase.section_count * self.bookcase.row_count
+        self.assertEquals(expected_count, shelves.count())
 
     def test_str_method(self):
         self.assertEquals(str(self.shelf), f'{self.shelf.title.lower()}, {self.shelf.row.lower()} ряд')
@@ -243,8 +241,19 @@ class NoteModelTest(TestCase):
         author = Author.objects.filter(name='John Smith', owner=user).first()
         if author is None:
             author = Author.objects.create(name='John Smith', owner=user)
-        cls.book = Book.objects.create(title='The Ipsum', shelf=shelf, author=author, favorite=False, owner=user)
+        cls.book = Book.objects.create(title='The Ipsum', shelf=shelf, author=author, owner=user, pages=None)
         cls.note = Note.objects.create(text='Bonbon marshmallow gummi bears icing tart marshmallow lollipop gummies. '
                                             'Halvah shortbread cake lemon drops oat cake lollipop candy. Dragée candy '
                                             'jelly donut brownie.',
                                        book=cls.book, owner=user)
+
+    def test_text_label(self):
+        field_label = self.note._meta.get_field('text').verbose_name
+        self.assertEquals(field_label, 'Заметка')
+
+    def test_book_label(self):
+        field_label = self.note._meta.get_field('book').verbose_name
+        self.assertEquals(field_label, 'Книга')
+
+    def test_get_absolute_url(self):
+        self.assertEquals(self.note.get_absolute_url(), f'/book/{self.book.pk}/')
