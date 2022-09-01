@@ -153,7 +153,7 @@ def voice_search(file, chat_id, answer_path):
     query = num_to_words(text)
 
     reply_text = process_search_query(chat_id, query)
-    synthesize(reply_text, answer_path)
+    synthesize(reply_text[1], answer_path)
 
 
 def get_book_by_id(book_id, chat_id):

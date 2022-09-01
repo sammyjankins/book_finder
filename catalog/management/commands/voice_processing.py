@@ -15,7 +15,6 @@ def recognize(file_path):
         data_sound = f.read()
     os.remove(file_path)
     headers = {'Authorization': f'Bearer {create_token(os.environ.get("YANDEX_OAUTH"))[0]}'}
-
     params = {
         'lang': 'ru-RU',
         'folderId': os.environ.get('YANDEX_FOLDER_ID'),
