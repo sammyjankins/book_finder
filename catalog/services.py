@@ -224,6 +224,7 @@ def create_book(user, isbn_number):
                 if author is None:
                     author = Author.objects.create(name=book_info['author'], owner=user)
                 book_info['author'] = author
+                book_info['new_author'] = author.name
                 book = Book.objects.create(**book_info)
                 return book
             else:
