@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.forms.models import model_to_dict
 from django.http import JsonResponse, HttpResponseRedirect
 from django.urls import reverse
+from django.utils.translation import gettext as _
 from pyzbar.pyzbar import decode as p_decode
 
 from catalog.models import Shelf, BookCase, Author, Book
@@ -200,10 +201,10 @@ def parse_book(request):
         if parsed is not None:
             return JsonResponse(parsed, safe=False)
         else:
-            return JsonResponse({'error_message': 'Не удалось найти книгу по вашему запросу'})
+            return JsonResponse({'error_message': _('Не удалось найти книгу по вашему запросу')})
     except Exception as e:
         print(e)
-        return JsonResponse({'error_message': 'Не удалось найти книгу по вашему запросу'})
+        return JsonResponse({'error_message': _('Не удалось найти книгу по вашему запросу')})
 
 
 def create_book(user, isbn_number):
@@ -214,7 +215,7 @@ def create_book(user, isbn_number):
 
         parsed = look_for_response(isbn_number)
         if parsed is None:
-            return f'Не удалось найти данные по запросу'
+            return _(f'Не удалось найти данные по запросу')
         else:
             book_info.update(parsed)
             if current_shelf:

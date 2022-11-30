@@ -31,13 +31,16 @@
                        id="ISBNp_input">
                 <button class="btn btn-outline-secondary" type="button" id="parse_book_info">Искать</button>
             </div>
-            <label for="ISBN_file_upload">Или пришлите фото штрихкода</label>
-            <div class="input-group">
-                <input type="file" class="form-control" id="ISBN_file_upload"
-                       aria-describedby="inputGroupFileAddon04" aria-label="Upload" name="barcode">
-                <button class="btn btn-outline-secondary" type="submit" id="ISBN_file_upload">Искать</button>
-            </div>
-            <br>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <label for="ISBN_file_upload">Или пришлите фото штрихкода</label>
+                <div class="input-group">
+                    <input type="file" class="form-control" id="ISBN_file_upload"
+                           aria-describedby="inputGroupFileAddon04" aria-label="Upload" name="barcode">
+                    <button class="btn btn-outline-secondary" type="submit" id="inputGroupFileAddon04">Искать</button>
+                </div>
+                <br>
+            </form>
 
             <form method="POST" enctype="multipart/form-data">
                 {% csrf_token %}

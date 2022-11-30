@@ -35,20 +35,8 @@
                     {% for books in book_list %}
                         {% for book in books.list %}
 
-                            <a class="list-group-item {% if book.favorite %}list-group-item-success{% endif %}"
-                               href="{% url 'book-detail' pk=book.id %}">
-                                {% if book.read %}<b>{% endif %}
+                            {% include 'catalog/books_block.html' %}
 
-                                {{ book.author }} - {{ book.title }}
-                                {% if book.year_of_publication %}
-                                    ({{ book.year_of_publication }})
-                                {% endif %}
-                                {% if book.pages %}
-                                    - {{ book.pages }} страниц
-                                {% endif %}
-                                {% if book.read %}</b>{% endif %}
-
-                            </a>
                         {% endfor %}
                     {% endfor %}
                     <a class="list-group-item list-group-item-action list-group-item-light"
