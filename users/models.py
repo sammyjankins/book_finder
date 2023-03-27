@@ -1,4 +1,5 @@
 from PIL import Image
+from asgiref.sync import sync_to_async
 from django.db import models
 from django.contrib.auth.models import User
 
@@ -10,8 +11,6 @@ class Profile(models.Model):
     image = models.ImageField(default='default.jpg', upload_to='profile_pics')
 
     tele_id = models.CharField(max_length=15, unique=True, null=True, blank=True)
-    last_book = models.ForeignKey(Book, verbose_name='Последняя книга', on_delete=models.SET_NULL, null=True,
-                                  default='')
     state = models.IntegerField(default=0)
 
     def __str__(self):
@@ -31,3 +30,6 @@ class Profile(models.Model):
         self.state = state
         self.save()
 
+    @sync_to_async
+    def aget_user(self):
+        return self.user

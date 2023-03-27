@@ -2,11 +2,10 @@ import os
 import re
 
 from django.contrib.auth.models import User
-
 import catalog.services as services
 from book_finder import settings
 from catalog.management.commands.voice_processing import synthesize, recognize
-from catalog.models import Shelf, Book, BookCase
+from catalog.models import Shelf, Book, BookCase, Author
 from users.models import Profile
 
 NUM_WORDS = {
@@ -43,21 +42,17 @@ BOOK_INFO_KEYS = {
 }
 
 
-def get_last_book(chat_id):
-    profile = get_profile_or_none(chat_id)
-    return profile.last_book
-
-
-def get_book_info(chat_id, book_id=None):
-    profile = get_profile_or_none(chat_id)
+def get_last_book(chat_id: str = None, book_id: str = None) -> Book:
     if book_id:
-        book = Book.objects.get(pk=book_id)
-        if book != profile.last_book:
-            profile.last_book = book
-            profile.save()
-    else:
-        book = profile.last_book
+        return Book.objects.get(pk=book_id)
+    profile = get_profile_or_none(chat_id)
+    queryset = services.owners_objects_queryset(profile.user, Book)
+    return queryset.last()
 
+
+def get_book_info(chat_id=None, book=None, book_id=None):
+    if not book:
+        book = get_last_book(chat_id, book_id)
     book_info = '\n'.join([f'{BOOK_INFO_KEYS[key]}{getattr(book, key)}'
                            for key in BOOK_INFO_KEYS if getattr(book, key) is not None])
     book_info = f'{book_info}\nШкаф: {book.shelf.bookcase.title}\nМестоположение: {book.shelf}'
@@ -82,6 +77,10 @@ def get_current_shelf(chat_id):
     return current_shelf
 
 
+def get_current_bookcase(current_shelf):
+    return current_shelf.bookcase
+
+
 def get_profile_or_none(chat_id):
     try:
         profile = Profile.objects.get(tele_id=chat_id)
@@ -91,12 +90,8 @@ def get_profile_or_none(chat_id):
 
 
 def delete_book(chat_id):
-    profile = get_profile_or_none(chat_id)
-    book = profile.last_book
-    delete_id = book.id
+    book = get_last_book(chat_id)
     book.delete()
-    profile.last_book = Book.objects.filter(owner=profile.user.id).exclude(pk=delete_id).last()
-    profile.save()
 
 
 def num_to_words(text):
@@ -109,51 +104,44 @@ def num_to_words(text):
         return text
 
 
-def set_dialog_state(chat_id, state):
-    profile = get_profile_or_none(chat_id)
-    profile.set_dialog_state(state)
-
-
 def get_profile_user(chat_id):
     return User.objects.get(profile__tele_id=chat_id)
 
 
-def get_isbn_from_msg(update):
-    try:
-        file = update.message.photo[-1].get_file()
-        file_name = file.download()
-        file_path = os.path.join(settings.BASE_DIR, file_name)
-        isbn_number = services.scan_isbn(file_path)
-        os.remove(file_path)
-    except Exception as e:
-        print(e)
-        isbn_number = update.message.text
+def get_isbn_from_file(f_name):
+    file_path = os.path.join(settings.BASE_DIR, f_name)
+    isbn_number = services.scan_isbn(file_path)
+    os.remove(file_path)
     return isbn_number
+
+
+def book_to_answer(book_id):
+    book = Book.objects.get(id=book_id)
+    bookcase = book.shelf.bookcase.title
+    shelf = book.shelf.title
+    row = book.shelf.row
+    author = book.author.name
+    return [True, f'Книга - {book}, автор - {author}, шкаф: {bookcase}, {shelf}, {row} ряд']
 
 
 def process_search_query(chat_id, query):
     profile = get_profile_or_none(chat_id)
-    result = services.owners_objects_queryset(profile.user.id, Book, query).first()
+    result = services.owners_objects_queryset(profile.user.id, Book, query)[:5]
     if result:
-        bookcase = result.shelf.bookcase.title
-        shelf = result.shelf.title
-        row = result.shelf.row
-        author = result.author.name
-        profile.last_book = result
-        profile.save()
-        return [True, f'Книга - {result}, автор - {author}, шкаф: {bookcase}, {shelf}, {row} ряд']
-    else:
-        return [False, f'По запросу "{query}" не найдено не одной книги в вашей библиотеке']
+        return {
+            book.id: {
+                'title': book.title,
+                'author': book.author,
+                'bookcase': f'{book.shelf.bookcase}',
+            } for book in result}
+    return None
 
 
-def voice_search(file, chat_id, answer_path):
-    file_name = file.download()
-    file_path = os.path.join(settings.BASE_DIR, file_name)
+def voice_search():
+    file_path = os.path.join(settings.BASE_DIR, 'request.ogg')
     text = recognize(file_path)['result']
     query = num_to_words(text)
-
-    reply_text = process_search_query(chat_id, query)
-    synthesize(reply_text[1], answer_path)
+    return query
 
 
 def get_book_by_id(book_id, chat_id):
@@ -174,22 +162,40 @@ def get_bookcase_list(chat_id):
     return {bookcase.id: bookcase.title for bookcase in bookcase_list}
 
 
-def get_shelf_list(chat_id, bookcase_id):
+def get_shelf_list(chat_id: str, bookcase_id: str) -> dict:
     user = get_profile_user(chat_id)
     shelf_list = services.owners_objects_queryset(user, Shelf).filter(bookcase_id=bookcase_id)
-    return {shelf.id: shelf for shelf in shelf_list}
+
+    return {shelf.id: {'title': shelf.title,
+                       'row': shelf.row,
+                       'is_current': shelf.is_current} for shelf in shelf_list}
 
 
-def create_book_for_isbn(update, chat_id):
+def create_book(chat_id, data):
+    book_info = {'author': '', 'year_of_publication': '',
+                 'type_of_cover': '', 'ISBN': '', 'language': '', 'pages': None, }
+
     user = get_profile_user(chat_id)
-    isbn_number = get_isbn_from_msg(update)
-    if isbn_number is not None:
-        book = services.create_book(user, isbn_number)
-        if type(book) is Book:
-            new_book_msg = f'ID: {book.id}, {book.author} - {book.title} - добавлена'
-        else:
-            new_book_msg = f'{isbn_number} - не найдено'
-    else:
-        new_book_msg = 'Не распознан штрих-код на фото'
+    current_shelf = get_current_shelf(chat_id)
 
-    return new_book_msg
+    book_info.update(data)
+
+    if current_shelf:
+        book_info.update({'shelf': current_shelf, 'owner': user})
+
+    if book_info['author']:
+        author = Author.objects.filter(name=book_info['author'], owner=user).first()
+        if author is None:
+            author = Author.objects.create(name=book_info['author'], owner=user)
+        book_info['author'] = author
+        book_info['new_author'] = author.name
+        book = Book.objects.create(**book_info)
+        return book
+    else:
+        return None
+
+
+def create_bookcase(data, user):
+    bookcase = BookCase.objects.create(**data, owner=user)
+    services.create_shelves(bookcase)
+    return bookcase

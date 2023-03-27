@@ -1,386 +1,790 @@
 import os
+import logging
 
-from django.conf import settings
+from asgiref.sync import sync_to_async
+
+from book_finder import settings
+from catalog import services
+from catalog.management.commands import bot_logic, voice_processing
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    ConversationHandler,
+    MessageHandler,
+    filters,
+)
 from django.core.management.base import BaseCommand
-from telegram import Bot, Update
-from telegram.ext import CallbackContext, Filters, MessageHandler, Updater, CommandHandler
-from telegram.ext import CallbackQueryHandler
-from telegram.utils.request import Request
 
-import catalog.management.commands.bot_logic as bot_logic
-import catalog.management.commands.bot_view as keyboards
-from catalog.models import Book
-from catalog.services import create_book, swap_favorite, swap_read, new_active_shelf
+# Enable logging
 
-DIALOG_STATES = {
-    0: 'initial',
-    1: 'search',
-    2: 'add',
-    3: 'add_group',
-}
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Shortcut for ConversationHandler.END
+END_STATE = ConversationHandler.END
+
 NEW_LN = '\n'
 
+# State definitions
+SEARCH_RESPONSE_STATE = 'SEARCH_RESPONSE_STATE'
+SELECTING_ACTION_STATE = 'SELECTING_ACTION_STATE'
+SEARCH_STATE = 'SEARCH_STATE'
+CHANGE_ACTIVE_SHELF_STATE = 'CHANGE_ACTIVE_SHELF_STATE'
+SEARCH_CHOICE_STATE = 'SEARCH_CHOICE_STATE'
+SELECT_BOOKCASE_STATE = 'SELECT_BOOKCASE_STATE'
+STOPPING_STATE = 'STOPPING_STATE'
+PROFILE_STATE = 'PROFILE_STATE'
+BOOK_INFO_STATE = 'BOOK_INFO_STATE'
+ADD_BOOKS_START_STATE = 'ADD_BOOKS_START_STATE'
+ADD_BOOKS_STATE = 'ADD_BOOKS_STATE'
+ADD_BOOKS_FINAL_STATE = 'ADD_BOOKS_FINAL_STATE'
+ADD_BOOKCASE_STATE = 'ADD_BOOKCASE_STATE'
+TYPING = 'TYPING'
+BOOKCASE_FEATURES_STATE = 'BOOKCASE_FEATURES_STATE'
+SAVE_BOOKCASE_STATE = 'SAVE_BOOKCASE_STATE'
 
-def log_errors(f):
-    def inner(*args, **kwargs):
-        try:
-            return f(*args, **kwargs)
-        except Exception as e:
-            error_msg = f'Error occured: {e}'
-            print(error_msg)
-            raise e
+# User_data keys
 
-    return inner
+START_OVER_UD = 'START_OVER_UD'
+NOT_FIRST_MSG_UD = 'NOT_FIRST_MSG_UD'
+LAST_BOOK_UD = 'LAST_BOOK_UD'
+REQUEST_TYPE_UD = 'REQUEST_TYPE_UD'
+SEARCH_RESULT_UD = 'SEARCH_RESULT_UD'
+BOOKCASE_UD = 'BOOKCASE_UD'
+ADD_BOOKS_UD = 'ADD_BOOKS_UD'
+BOOKS_MSG_UD = 'BOOKS_MSG_UD'
+BOOKCASE_CREATE_UD = 'BOOKCASE_CREATE_UD'
+CURRENT_FEATURE_UD = 'CURRENT_FEATURE_UD'
+
+# Callback constants
+
+REGISTER_DONE_CB = 'REGISTER_DONE_CB'
+SEARCH_REQUEST_CB = 'SEARCH_REQUEST_CB'
+END_CB = 'END_CB'
+BOOK_INFO_CB = 'BOOK_INFO_CB'
+FAV_CB = 'FAV_CB'
+READ_CB = 'READ_CB'
+BOOK_DELETE_CB = 'BOOK_DELETE_CB'
+PROFILE_INFO_CB = 'PROFILE_INFO_CB'
+BOOKCASE_CB = 'BOOKCASE_CB'
+CHANGE_ACTIVE_SHELF_CB = 'CHANGE_ACTIVE_SHELF_CB'
+SELECT_BOOKCASE_CB = 'SELECT_BOOKCASE_CB'
+ADD_BOOKS_START_CB = 'ADD_BOOKS_START_CB'
+ADD_BOOKCASE_CB = 'ADD_BOOKCASE_CB'
+ADD_BOOKS_DONE_CB = 'ADD_BOOKS_DONE_CB'
+NEW_BOOKCASE_TITLE_CB = 'NEW_BOOKCASE_TITLE_CB'
+NEW_BOOKCASE_FEATURE_CB = 'NEW_BOOKCASE_FEATURE_CB'
+SHELF_COUNT_CB = 'SHELF_COUNT_CB'
+ROW_COUNT_CB = 'ROW_COUNT_CB'
+SECTIONS_COUNT_CB = 'SECTIONS_COUNT_CB'
+BOOKCASE_SAVE_CB = 'BOOKCASE_SAVE_CB'
 
 
-def help_msg(update: Update, context: CallbackContext):
-    chat_id = update.message.chat_id
-    update.message.reply_text(
-        text="Этот бот поможет вам быстро найти книгу в вашем шкафу или добавить новую книгу "
-             "на активную полку.\nЧтобы добавлять книги, нужно создать шкаф на сайте. Книги будут "
-             "добавляться на активную полку, которую можно выбрать на сайте. Для добавления книги "
-             "можно отправить фото штрих-кода с ISBN, либо текстовый поисковой запрос, который может "
-             "включать в себя номер ISBN, название, автора. Для поиска книги по вашей библиотеке можно "
-             "использовать как текстовый, так и голосовой запрос."
-        ,
-        reply_markup=keyboards.get_add_keyboard() if bot_logic.get_profile_or_none(
-            chat_id).last_book else keyboards.get_nolastbook_keyboard(),
+async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = (
+        "Я бот проекта Book Finder. Помогу быстро найти книгу в вашем шкафу или добавить новую "
+        "на активную полку.\nДля добавления книг, нужно создать шкаф на сайте. Книги добавляются "
+        "по фото штрих-кода ISBN, либо текстовым запросом (ISBN, название или автор). "
+        "Для поиска по вашей библиотеке можно использовать как текстовый, так и голосовой запрос."
+    )
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
 
+
+def check_profile(func):
+    """is telegram tied to a profile on the site"""
+
+    async def wrapped(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        chat_id = update.effective_chat.id
+        profile = await sync_to_async(bot_logic.get_profile_or_none)(chat_id)
+
+        if not profile:
+            text = (
+                'Для продолжения работы необходимо зарегистрироваться на сайте и заполнить базу данных. '
+                'Если вы уже зарегистрированы, привяжите ваш телеграм к базе данных.'
+            )
+            buttons = [
+                [
+                    InlineKeyboardButton(text="Регистрация", url='https://www.bookfinder.space/register/'),
+                    InlineKeyboardButton(text="Готово", callback_data=str(REGISTER_DONE_CB)),
+                ],
+            ]
+            keyboard = InlineKeyboardMarkup(buttons)
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=text,
+                                           reply_markup=keyboard)
+        else:
+            return await func(update, context)
+
+    return wrapped
+
+
+@check_profile
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Register tele id of select action."""
+    if not context.user_data.get(NOT_FIRST_MSG_UD):
+        await update.message.reply_text("Привет! Я помогу быстро найти книгу в вашем шкафу или добавить новую.")
+        context.user_data[NOT_FIRST_MSG_UD] = True
+    text = (
+        "Выберите действие"
     )
 
+    buttons = [
+        [
+            InlineKeyboardButton(text="Поиск", callback_data=str(SEARCH_REQUEST_CB)),
+        ],
+        [
+            InlineKeyboardButton(text="Последняя книга", callback_data=str(BOOK_INFO_CB)),
+            InlineKeyboardButton(text="Мой профиль", callback_data=str(PROFILE_INFO_CB)),
+        ],
+        [
+            InlineKeyboardButton(text="Новые книги", callback_data=str(ADD_BOOKS_START_CB)),
+            InlineKeyboardButton(text="Новый шкаф", callback_data=str(ADD_BOOKCASE_CB)),
+        ],
+        [
+            InlineKeyboardButton(text="Активная полка", callback_data=str(SELECT_BOOKCASE_CB)),
+            InlineKeyboardButton(text="Стоп", callback_data=str(END_CB)),
+        ],
+    ]
+    keyboard = InlineKeyboardMarkup(buttons)
 
-@log_errors
-def answer(update: Update, context: CallbackContext):
-    chat_id = update.message.chat_id
-
-    profile = bot_logic.get_profile_or_none(chat_id)
-    if profile:
-        if bot_logic.get_current_shelf(chat_id):
-            if profile.state == 0:
-                reply_text = 'Выберите действие:'
-                update.message.reply_text(
-                    text=reply_text,
-                    reply_markup=keyboards.get_add_keyboard() if bot_logic.get_profile_or_none(
-                        chat_id).last_book else keyboards.get_nolastbook_keyboard(), )
-            elif profile.state == 1:
-                search_answer(chat_id, update)
-                bot_logic.get_profile_or_none(chat_id).set_dialog_state(0)
-            elif profile.state == 2:
-                add_book(chat_id, update)
-                bot_logic.get_profile_or_none(chat_id).set_dialog_state(0)
-            elif profile.state == 3:
-                add_books(chat_id, update, context.bot)
-        else:
-            context.bot.send_message(
-                chat_id=chat_id,
-                text="Для использования основных возможностей бота в вашем профиле должен быть хотя "
-                     "бы один книжный шкаф. Для создания книжного шкафа перейдите на сайт.",
-                reply_markup=keyboards.get_no_shelf_keyboard(), )
+    # If we're starting over we don't need to send a new message
+    if context.user_data.get(START_OVER_UD):
+        print('start over')
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
     else:
-        reply_text = ('Для продолжения работы необходимо зарегистрироваться на сайте. '
-                      'Если вы уже зарегистрированы, привяжите ваш телеграм к базе данных. '
-                      'Для продолжения нажмите "Готово".')
-        update.message.reply_text(
-            text=reply_text,
-            reply_markup=keyboards.get_register_keyboard(chat_id),
-        )
+        print('NOT start over')
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=text,
+                                       reply_markup=keyboard)
+
+    context.user_data[START_OVER_UD] = False
+
+    logger.info("SELECTING_ACTION_STATE")
+    return SELECTING_ACTION_STATE
 
 
-def search_answer(chat_id, update):
-    if update.message.voice is not None:
+async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """End Conversation by command."""
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text(text="Приятного вам дня!")
 
+    logger.info("STOPPING_STATE")
+    return STOPPING_STATE
+
+
+async def stop_nested(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Completely end conversation from within nested conversation."""
+    await update.message.reply_text("Стоп нестед")
+
+    logger.info("STOPPING_STATE")
+    return STOPPING_STATE
+
+
+async def search_ask_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Prompt user to input data for book search."""
+    text = "Введите поисковой зарос."
+    buttons = [
+        [
+            InlineKeyboardButton(text="Отмена", callback_data=str(END_CB)),
+        ],
+
+    ]
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
+
+    logger.info("SEARCH_STATE")
+    return SEARCH_STATE
+
+
+async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Return search results in the form of text or voice message, depending on the type of request.
+    Issuing buttons for interacting with found books."""
+    buttons = [
+        [
+            InlineKeyboardButton(text="Назад", callback_data=str(END_CB)),
+        ],
+    ]
+
+    # message type definition
+    if update.message.text is not None:
+        request = update.message.text
+        context.user_data[REQUEST_TYPE_UD] = 'TEXT'
+    else:
+        file = await context.bot.get_file(update.message.voice.file_id)
+        await file.download_to_drive(os.path.join(settings.BASE_DIR, 'request.ogg'))
+        request = await sync_to_async(bot_logic.voice_search)()
+        context.user_data[REQUEST_TYPE_UD] = 'VOICE'
+
+    result = await sync_to_async(bot_logic.process_search_query)(update.message.chat_id, request)
+
+    # determining the number of objects in the search result
+    if result:
+        if len(result) == 1:
+            book_id, book_data = result.popitem()
+            context.user_data[LAST_BOOK_UD] = book_id
+            text = await sync_to_async(bot_logic.book_to_answer)(book_id)
+            buttons[0].append(InlineKeyboardButton(text="Инфо о книге", callback_data=str(BOOK_INFO_CB)))
+
+            logger.info("SEARCH_RESPONSE_STATE")
+            state = SEARCH_RESPONSE_STATE
+
+        else:
+            text = "Выберите наиболее подходящий вариант из результатов поиска:"
+            book_info_buttons = [InlineKeyboardButton(
+                f'{data["author"]} - {data["title"]}, {data["bookcase"]}',
+                callback_data=f"{BOOK_INFO_CB}-{book_id}")
+                for book_id, data in result.items()]
+            buttons = [[button] for button in book_info_buttons] + buttons
+
+            logger.info("SEARCH_CHOICE_STATE")
+            state = SEARCH_CHOICE_STATE
+
+    else:
+        text = f"Книга по запросу {request} не найдена. Попробуйте еще раз или вернитесь к выбору действий."
+
+        logger.info("SEARCH_STATE")
+        state = SEARCH_STATE
+
+    context.user_data[START_OVER_UD] = True
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # determining the type of response depending on the type of request
+    if context.user_data[REQUEST_TYPE_UD] == 'VOICE':
         answer_path = os.path.join(settings.BASE_DIR, 'answer.ogg')
-        bot_logic.voice_search(file=update.message.voice.get_file(),
-                               chat_id=chat_id,
-                               answer_path=answer_path)
-        update.message.reply_voice(
-            voice=(open(answer_path, 'rb')),
-            reply_markup=keyboards.get_search_edit_info_keyboard(chat_id)
+        await sync_to_async(voice_processing.synthesize)(text, answer_path)
+        await update.message.reply_voice(
+            voice=(open(answer_path, 'rb')), reply_markup=keyboard
         )
-
-    elif update.message.text is not None:
-        result = bot_logic.process_search_query(chat_id, update.message.text)
-        text = result[1]
-        keyboard = keyboards.get_search_edit_info_keyboard(chat_id) if result[0] else keyboards.get_back_keyboard()
-        update.message.reply_text(
-            text=text,
-            reply_markup=keyboard,
-        )
-
     else:
-        update.message.reply_text(
-            text='Боюсь наше общение зашло в тупик. Выберите действие:',
-            reply_markup=keyboards.get_add_keyboard() if bot_logic.get_profile_or_none(
-                chat_id).last_book else keyboards.get_nolastbook_keyboard(),
-        )
+        await update.message.reply_text(text=text, reply_markup=keyboard)
+    return state
 
 
-def add_book(chat_id, update):
-    """Добваление книги. Попытка получить фото и извлечь из него номер isbn. Если ошибка - isbn мог быть
-    выслан текстом"""
-    user = bot_logic.get_profile_user(chat_id)
+async def get_last_book_from_ud(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Getting the last book object to change its state"""
+    last_book_id = context.user_data.get(LAST_BOOK_UD)
+    last_book = await sync_to_async(bot_logic.get_last_book)(chat_id=update.effective_chat.id, book_id=last_book_id)
+    if not last_book_id:
+        context.user_data[LAST_BOOK_UD] = last_book.id
 
-    if isbn_number := bot_logic.get_isbn_from_msg(update):
-        book = create_book(user, isbn_number)
+    return last_book
 
-        # если результат функии create_book - объект класса Book - успех, иначе - сообщение об ошибке.
-        if type(book) is Book:
-            update.message.reply_text(
-                text='Книга была успешно добавлена в активную полку!\n'
-                     'Вы можете добавить или изменить информацию о книге. '
-                     f'\n{bot_logic.get_book_info(chat_id)}',
-                reply_markup=keyboards.get_search_edit_info_keyboard(chat_id),
-            )
-        else:
-            update.message.reply_text(
-                text=book,
-                reply_markup=keyboards.get_add_keyboard()
 
-            )
+async def swap_favorite_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Swapping book state"""
+    last_book = await get_last_book_from_ud(update, context)
+    await sync_to_async(services.swap_favorite)(kwargs={'pk': last_book.id})
+    state = await show_book_info(update, context)
+    return state
+
+
+async def swap_read_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Swapping book state"""
+    last_book = await get_last_book_from_ud(update, context)
+    await sync_to_async(services.swap_read)(kwargs={'pk': last_book.id})
+    state = await show_book_info(update, context)
+    return state
+
+
+async def book_delete_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Deleting a book"""
+    await sync_to_async(bot_logic.delete_book)(chat_id=update.effective_chat.id)
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text(text="Книга удалена")
+    context.user_data[START_OVER_UD] = False
+    context.user_data[LAST_BOOK_UD] = None
+    state = await start(update, context)
+    return state
+
+
+async def show_book_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Display information about the book and the menu for interacting with it."""
+    star, check = '\u2B50', '\u2705'
+
+    if '-' in update.callback_query.data:
+        book_id = update.callback_query.data.split('-')[-1]
+        context.user_data[LAST_BOOK_UD] = book_id
+
+    last_book = await get_last_book_from_ud(update, context)
+    text = await sync_to_async(bot_logic.get_book_info)(update.effective_chat.id, last_book)
+
+    buttons = [
+        [
+            InlineKeyboardButton(text="Открыть на сайте",
+                                 url=f'{os.environ.get("MY_CURRENT_URL")}book/{last_book.id}/'),
+            InlineKeyboardButton("Удалить", callback_data=BOOK_DELETE_CB),
+        ],
+        [
+            InlineKeyboardButton(f'Избранное{star * last_book.favorite}', callback_data=FAV_CB),
+            InlineKeyboardButton(f'Прочитано{check * last_book.read}', callback_data=READ_CB),
+        ],
+        [
+            InlineKeyboardButton(text="Назад", callback_data=str(END_CB)),
+        ],
+
+    ]
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
+    context.user_data[START_OVER_UD] = True
+
+    logger.info("BOOK_INFO_STATE")
+    return BOOK_INFO_STATE
+
+
+async def show_profile_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Display information about user profile"""
+    text = await sync_to_async(bot_logic.get_profile_info)(update.effective_chat.id)
+
+    buttons = [
+        [
+            InlineKeyboardButton(text="Поиск", callback_data=str(SEARCH_REQUEST_CB)),
+        ],
+        [
+            InlineKeyboardButton(text="Последняя книга", callback_data=str(BOOK_INFO_CB)),
+        ],
+        [
+            InlineKeyboardButton(text="Назад", callback_data=str(END_CB)),
+        ],
+
+    ]
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
+    context.user_data[START_OVER_UD] = True
+
+    logger.info("PROFILE_STATE")
+    return PROFILE_STATE
+
+
+async def select_bookcase(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Choosing a bookcase to change the active shelf."""
+    current_shelf = await sync_to_async(bot_logic.get_current_shelf)(update.effective_chat.id)
+    current_bookcase = await sync_to_async(bot_logic.get_current_bookcase)(current_shelf)
+    bookcase_dict = await sync_to_async(bot_logic.get_bookcase_list)(update.effective_chat.id)
+
+    current_shelf_line = f'шкаф - {current_bookcase.title.lower()}, {current_shelf}'
+    text = ("При добавлении через бота книги попадают на полку: "
+            f"{current_shelf_line}. Для выбора другой полки выберите шкаф: ")
+
+    buttons = [InlineKeyboardButton(title,
+                                    callback_data=f"{BOOKCASE_CB}-{bookcase_id}")
+               for bookcase_id, title in bookcase_dict.items()]
+    keyboard = [[button] for button in buttons]
+    keyboard.append([InlineKeyboardButton(text="Назад", callback_data=str(END_CB))])
+
+    keyboard = InlineKeyboardMarkup(keyboard)
+
+    await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
+    context.user_data[START_OVER_UD] = True
+
+    logger.info("SELECT_BOOKCASE_STATE")
+    return SELECT_BOOKCASE_STATE
+
+
+async def select_shelf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Display options for a new active shelf from the selected bookcase."""
+    check = '\u2705'
+    text = 'Выберите активную полку: '
+
+    callback = update.callback_query.data.split('-')
+
+    if callback[0] == BOOKCASE_CB:
+        bookcase_id = callback[-1]
+        context.user_data[BOOKCASE_UD] = bookcase_id
     else:
-        update.message.reply_text(
-            text="Не найден ISBN на фото",
-            reply_markup=keyboards.get_add_keyboard()
+        bookcase_id = context.user_data.get(BOOKCASE_UD)
 
-        )
+    shelf_dict = await sync_to_async(bot_logic.get_shelf_list)(update.effective_chat.id, bookcase_id)
 
+    buttons = [InlineKeyboardButton(f'{shelf["title"]}, {shelf["row"]} ряд {check if shelf["is_current"] else ""}',
+                                    callback_data=f"{CHANGE_ACTIVE_SHELF_CB}-{shelf_id}")
+               for shelf_id, shelf in shelf_dict.items()]
+    keyboard = [[button] for button in buttons]
+    keyboard.append([InlineKeyboardButton(text="Назад", callback_data=str(END_CB))])
 
-def add_books(chat_id, update, bot):
-    new_book_msg = bot_logic.create_book_for_isbn(update, chat_id)
+    keyboard = InlineKeyboardMarkup(keyboard)
 
-    bot.msg_for_edit[chat_id] = bot.edit_message_text(
-        text=f"{bot.msg_for_edit[chat_id].text}{NEW_LN}{new_book_msg}",
-        chat_id=chat_id,
-        message_id=bot.msg_for_edit[chat_id].message_id,
-        reply_markup=keyboards.get_done_keyboard(),
-    )
-    bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
+    await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
 
-
-# CALLBACK FUNCTIONS ============================================================================================
-
-def callback_new_book(bot, chat_id):
-    current_shelf = bot_logic.get_current_shelf(chat_id)
-    current_shelf_line = f'шкаф - {current_shelf.bookcase.title.lower()}, {current_shelf}'
-    bot.send_message(
-        chat_id=chat_id,
-        text=f"Мне нужен номер isbn, или фото штрихкода на книге. Книга будет добавлена на активную полку ("
-             f"{current_shelf_line}).",
-    )
-    bot_logic.set_dialog_state(chat_id, 2)
+    logger.info("CHANGE_ACTIVE_SHELF_STATE")
+    return CHANGE_ACTIVE_SHELF_STATE
 
 
-def callback_new_active_shelf(bot, chat_id):
-    current_shelf = bot_logic.get_current_shelf(chat_id)
-    bookcase_dict = bot_logic.get_bookcase_list(chat_id)
-
-    current_shelf_line = f'шкаф - {current_shelf.bookcase.title.lower()}, {current_shelf}'
-    bot.send_message(
-        chat_id=chat_id,
-        text=f"Активная - полка, на которую добавляются книги при использовании бота. Ваша активная полка - "
-             f"{current_shelf_line}. Для выбора другой активной полки выберите шкаф: ",
-        reply_markup=keyboards.get_bookcase_list_keyboard(bookcase_dict),
-    )
+async def change_active_shelf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Saving information about the new active shelf."""
+    shelf_id = update.callback_query.data.split('-')[-1]
+    user = await sync_to_async(bot_logic.get_profile_user)(update.effective_chat.id)
+    await sync_to_async(services.new_active_shelf)(user=user, kwargs={'pk': shelf_id})
+    state = await select_shelf(update, context)
+    return state
 
 
-def callback_shelf_list(bot, chat_id, bookcase_id):
-    current_shelf = bot_logic.get_current_shelf(chat_id)
-    shelf_dict = bot_logic.get_shelf_list(chat_id, bookcase_id)
-    bot.send_message(
-        chat_id=chat_id,
-        text="Выберите активную полку:",
-        reply_markup=keyboards.get_shelf_list_keyboard(shelf_dict, current_shelf),
-    )
+async def add_books_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Prompt user to send ISBN number or photo to add books."""
+    current_shelf = await sync_to_async(bot_logic.get_current_shelf)(update.effective_chat.id)
+    current_bookcase = await sync_to_async(bot_logic.get_current_bookcase)(current_shelf)
+    current_shelf_line = f'шкаф - {current_bookcase.title.lower()}, {current_shelf}'
+
+    context.user_data[ADD_BOOKS_UD] = dict()
+
+    text = ('Мне нужен номер ISBN (фото или текст), либо название книги. Следует давать не более одного запроса '
+            f'на сообщение. Активная полка - {current_shelf_line}. '
+            'Когда закончите - нажмите "Готово". Для отмены - нажмите "Отмена".')
+
+    buttons = [
+        [
+            InlineKeyboardButton(text="Отмена", callback_data=str(END_CB)),
+        ],
+    ]
+    keyboard = InlineKeyboardMarkup(buttons)
+    message = await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
+    context.user_data[BOOKS_MSG_UD] = {'text': message.text,
+                                       'message_id': message.message_id,
+                                       'chat_id': message.chat_id, }
+
+    logger.info("ADD_BOOKS_START_STATE")
+    return ADD_BOOKS_START_STATE
 
 
-def callback_new_book_group(bot, chat_id):
-    current_shelf = bot_logic.get_current_shelf(chat_id)
-    init_msg = ('Мне нужны фото штрихкодов на книгах либо номера ISBN, по ондому номеру на сообщение. '
-                f'Активная полка - {current_shelf}. '
-                'Когда закончите добавлять книги нажмите "Готово".')
-    message = bot.send_message(
-        chat_id=chat_id,
-        text=init_msg,
-        reply_markup=keyboards.get_back_keyboard(),
-    )
-    bot.msg_for_edit[chat_id] = message
-    bot_logic.set_dialog_state(chat_id, 3)
-
-
-def callback_search(bot, chat_id):
-    bot.send_message(
-        chat_id=chat_id,
-        text="Какую книгу ищем?",
-    )
-    bot_logic.set_dialog_state(chat_id, 1)
-
-
-def callback_book_info(bot, chat_id, book_id=None):
-    book_info = bot_logic.get_book_info(chat_id, book_id=book_id)
-    bot.send_message(
-        chat_id=chat_id,
-        text=book_info,
-        reply_markup=keyboards.get_search_edit_info_keyboard(chat_id),
-    )
-
-
-def callback_profile_info(bot, chat_id):
-    profile_info = bot_logic.get_profile_info(chat_id)
-    bot.send_message(
-        chat_id=chat_id,
-        text=profile_info,
-        reply_markup=keyboards.get_add_keyboard(),
-    )
-
-
-def callback_fav(query, chat_id):
-    swap_favorite(kwargs={'pk': bot_logic.get_last_book(chat_id).id})
-    book_info = bot_logic.get_book_info(chat_id)
-    query.edit_message_text(
-        text=book_info,
-        reply_markup=keyboards.get_search_edit_info_keyboard(chat_id),
-    )
-
-
-def callback_read(query, chat_id):
-    swap_read(kwargs={'pk': bot_logic.get_last_book(chat_id).id})
-    book_info = bot_logic.get_book_info(chat_id)
-    query.edit_message_text(
-        text=book_info,
-        reply_markup=keyboards.get_search_edit_info_keyboard(chat_id),
-    )
-
-
-def callback_shelf_select(query, chat_id, shelf_id):
-    user = bot_logic.get_profile_user(chat_id)
-    new_active_shelf(user=user, kwargs={'pk': shelf_id})
-    current_shelf = bot_logic.get_current_shelf(chat_id)
-    shelf_dict = bot_logic.get_shelf_list(chat_id, current_shelf.bookcase.id)
-    query.edit_message_text(
-        text="Активная полка изменена. Вы можете выбрать новую активную полку или вернуться к выбору действия:",
-        reply_markup=keyboards.get_shelf_list_keyboard(shelf_dict, current_shelf),
-    )
-
-
-def callback_back(bot, chat_id):
-    reply_text = 'Выберите действие:'
-    bot.send_message(
-        chat_id=chat_id,
-        text=reply_text,
-        reply_markup=keyboards.get_add_keyboard() if bot_logic.get_profile_or_none(
-            chat_id).last_book else keyboards.get_nolastbook_keyboard(), )
-    bot_logic.set_dialog_state(chat_id, 0)
-
-
-def callback_delete(bot, chat_id):
-    bot_logic.delete_book(chat_id)
-    reply_text = 'Книга удалена.'
-    bot.send_message(
-        chat_id=chat_id,
-        text=reply_text,
-    )
-
-
-def callback_done(bot, chat_id):
-    message = bot.msg_for_edit[chat_id].text
-    books_dict = bot_logic.extract_book_ids_from_msg(message, chat_id)
-    del bot.msg_for_edit[chat_id]
-    bot.send_message(
-        chat_id=chat_id,
-        text="Вы можете ознакомиться с любой книгой из добавленных:",
-        reply_markup=keyboards.get_new_books_list_keyboard(books_dict)
-    )
-
-
-def keyboard_callback_handler(update: Update, context: CallbackContext):
-    query = update.callback_query
-    data = query.data
-    chat_id = update.effective_message.chat_id
-
-    profile = bot_logic.get_profile_or_none(chat_id)
-    if profile:
-        if bot_logic.get_current_shelf(chat_id):
-            if data == keyboards.CB_BINDED:
-                callback_back(context.bot, chat_id)
-            elif data == keyboards.CB_PROFILE_INFO:
-                callback_profile_info(context.bot, chat_id)
-            elif data == keyboards.CB_NEW_BOOK:
-                callback_new_book(context.bot, chat_id)
-            elif data == keyboards.CB_NEW_BOOK_GROUP:
-                callback_new_book_group(context.bot, chat_id)
-            elif data == keyboards.CB_NEW_CURRENT_SHELF:
-                callback_new_active_shelf(context.bot, chat_id)
-            elif keyboards.CB_SHELVES in data:
-                bookcase_id = data.split('-')[-1]
-                callback_shelf_list(context.bot, chat_id, bookcase_id)
-            elif keyboards.CB_SHELF_SELECT in data:
-                shelf_id = data.split('-')[-1]
-                callback_shelf_select(query, chat_id, shelf_id)
-            else:
-                if profile.last_book is not None:
-                    if data == keyboards.CB_SEARCH:
-                        callback_search(context.bot, chat_id)
-                    if data == keyboards.CB_FAV:
-                        callback_fav(query, chat_id)
-                    if data == keyboards.CB_READ:
-                        callback_read(query, chat_id)
-                    if data == keyboards.CB_BACK:
-                        callback_back(context.bot, chat_id)
-                    if data == keyboards.CB_DONE:
-                        callback_done(context.bot, chat_id)
-                    if data == keyboards.CB_DELETE:
-                        callback_delete(context.bot, chat_id)
-                        callback_back(context.bot, chat_id)
-                    if data == keyboards.CB_BOOK_INFO:
-                        callback_book_info(context.bot, chat_id)
-                    elif keyboards.CB_BOOK_INFO in data:
-                        book_id = data.split('-')[-1]
-                        callback_book_info(context.bot, chat_id, book_id=book_id)
-                else:
-                    context.bot.send_message(
-                        chat_id=chat_id,
-                        text="В вашей библиотеке нет книг. Вы можете добавить книги в библиотеку с помощью "
-                             "данного бота.",
-                        reply_markup=keyboards.get_nolastbook_keyboard(),
-                    )
-        else:
-            context.bot.send_message(
-                chat_id=chat_id,
-                text="Для использования основных возможностей бота в вашем профиле должен быть хотя "
-                     "бы один книжный шкаф. Для создания книжного шкафа перейдите на сайт.",
-                reply_markup=keyboards.get_no_shelf_keyboard(),
-            )
+async def add_books(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """ISBN number processing and list replenishment."""
+    if update.message.text is not None:
+        isbn = update.message.text
     else:
-        context.bot.send_message(
-            chat_id=chat_id,
-            text='Для продолжения работы необходимо зарегистрироваться на сайте и заполнить базу данных. '
-                 'Если вы уже зарегистрированы, привяжите ваш телеграм к базе данных.',
-            reply_markup=keyboards.get_register_keyboard(chat_id),
-        )
+        file = await context.bot.get_file(update.message.photo[-1].file_id)
+        f_name = file.file_path.split('/')[-1]
+        await file.download_to_drive(os.path.join(settings.BASE_DIR, file.file_path.split('/')[-1]))
+        isbn = await sync_to_async(bot_logic.get_isbn_from_file)(f_name)
+
+    search_result = services.look_for_response(isbn)
+    book_info = services.look_for_response(isbn)
+    context.user_data[ADD_BOOKS_UD][book_info['ISBN']] = book_info
+
+    if search_result:
+        new_book_msg = f'{search_result["author"]} - {search_result["title"]}'
+    else:
+        new_book_msg = 'Нет данных'
+
+    text = f'{context.user_data[BOOKS_MSG_UD]["text"]}{NEW_LN}{new_book_msg}'
+
+    buttons = [
+        [
+            InlineKeyboardButton(text="Готово", callback_data=str(ADD_BOOKS_DONE_CB)),
+        ],
+        [
+            InlineKeyboardButton(text="Отмена", callback_data=str(END_CB)),
+        ],
+    ]
+
+    keyboard = InlineKeyboardMarkup(buttons)
+    await context.bot.delete_message(chat_id=update.message.chat_id, message_id=update.message.message_id)
+    message = await context.bot.edit_message_text(text=text,
+                                                  chat_id=update.message.chat_id,
+                                                  message_id=context.user_data[
+                                                      BOOKS_MSG_UD]["message_id"],
+                                                  reply_markup=keyboard)
+    context.user_data[BOOKS_MSG_UD] = {'text': message.text,
+                                       'message_id': message.message_id,
+                                       'chat_id': message.chat_id, }
+    logger.info("ADD_BOOKS_STATE")
+    return ADD_BOOKS_STATE
+
+
+async def create_found_books(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Creating books in the database from the found data. Issuing buttons for interacting with added books."""
+    buttons = []
+
+    text = 'Вы можете ознакомиться с любой книгой из добавленных: '
+
+    for _, data in context.user_data[ADD_BOOKS_UD].items():
+        book = await sync_to_async(bot_logic.create_book)(context.user_data[BOOKS_MSG_UD]["chat_id"], data)
+        if book:
+            buttons.append([InlineKeyboardButton(
+                f'{data["author"]} - {data["title"]}',
+                callback_data=f"{BOOK_INFO_CB}-{book.id}")])
+
+    buttons.append([InlineKeyboardButton(text="Главное меню", callback_data=str(END_CB))])
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    await context.bot.edit_message_text(text=text,
+                                        chat_id=context.user_data[BOOKS_MSG_UD]["chat_id"],
+                                        message_id=context.user_data[BOOKS_MSG_UD]["message_id"],
+                                        reply_markup=keyboard)
+
+    del context.user_data[ADD_BOOKS_UD]
+
+    logger.info("ADD_BOOKS_FINAL_STATE")
+    return ADD_BOOKS_FINAL_STATE
+
+
+async def create_bookcase_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Request information about the cabinet to create."""
+    bookcase_info = context.user_data.get(BOOKCASE_CREATE_UD)
+    if not bookcase_info:
+        bookcase_info = context.user_data[BOOKCASE_CREATE_UD] = {
+            'title': None,
+            'shelf_count': None,
+            'row_count': None,
+            'section_count': None,
+        }
+    text = (
+        f'Для создания шкафа нужно указать характеристики: {NEW_LN}'
+        f'Название: {bookcase_info.get("title") or "Не указано"}{NEW_LN}'
+        f'Количество полок: {bookcase_info.get("shelf_count") or "Не указано"}{NEW_LN}'
+        f'Рядов на полке: {bookcase_info.get("row_count") or "Не указано"}{NEW_LN}'
+        f'Секций на полке: {bookcase_info.get("section_count") or "Не указано"}{NEW_LN}'
+    )
+
+    buttons = [
+        [
+            InlineKeyboardButton(text="Название", callback_data=str(NEW_BOOKCASE_TITLE_CB)),
+            InlineKeyboardButton(text="# полок", callback_data=f'{NEW_BOOKCASE_FEATURE_CB}-0'),
+        ],
+        [
+            InlineKeyboardButton(text="# рядов", callback_data=f'{NEW_BOOKCASE_FEATURE_CB}-1'),
+            InlineKeyboardButton(text="# секций", callback_data=f'{NEW_BOOKCASE_FEATURE_CB}-2'),
+        ],
+    ]
+
+    if all((bookcase_info.get("title"), bookcase_info.get("shelf_count"),
+            bookcase_info.get("row_count"), bookcase_info.get("section_count"))):
+        buttons.append([InlineKeyboardButton(text="Готово", callback_data=str(BOOKCASE_SAVE_CB)), ])
+
+    buttons.append([InlineKeyboardButton(text="Отмена", callback_data=str(END_CB)), ])
+
+    keyboard = InlineKeyboardMarkup(buttons)
+    if not context.user_data.get(START_OVER_UD):
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
+    else:
+        await update.message.reply_text(text=text, reply_markup=keyboard)
+    context.user_data[START_OVER_UD] = False
+
+    logger.info("ADD_BOOKCASE_STATE")
+    return ADD_BOOKCASE_STATE
+
+
+async def new_bookcase_title(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Prompt user to input bookcase title."""
+    text = "Введите название нового шкафа: "
+    buttons = [
+        [
+            InlineKeyboardButton(text="Отмена", callback_data=str(END_CB)),
+        ],
+
+    ]
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
+
+    logger.info("TYPING")
+    return TYPING
+
+
+async def save_bookcase_title(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Saving bookcase title data."""
+    context.user_data[BOOKCASE_CREATE_UD]['title'] = update.message.text
+    context.user_data[START_OVER_UD] = True
+
+    return await create_bookcase_start(update, context)
+
+
+async def new_bookcase_feature(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Prompt user to select a value for the selected bookcase feature."""
+    features = {
+        '0': {
+            'text': 'полок',
+            'feature': 'shelf_count',
+            'max_amount': 10,
+            'callback': SHELF_COUNT_CB,
+        },
+        '1': {
+            'text': 'рядов',
+            'feature': 'row_count',
+            'max_amount': 4,
+            'callback': ROW_COUNT_CB,
+        },
+        '2': {
+            'text': 'секций',
+            'feature': 'section_count',
+            'max_amount': 2,
+            'callback': SECTIONS_COUNT_CB,
+        },
+    }
+    feature = update.callback_query.data.split('-')[-1]
+    context.user_data[CURRENT_FEATURE_UD] = features[feature]['feature']
+
+    buttons = [
+        [InlineKeyboardButton(f'{i}', callback_data=f"{features[feature]['callback']}-{i}"),
+         InlineKeyboardButton(f'{i + 1}', callback_data=f"{features[feature]['callback']}-{i + 1}")]
+        for i in range(1, features[feature]['max_amount'] + 1, 2)
+    ]
+    buttons.append([InlineKeyboardButton(text="Назад", callback_data=str(END_CB))])
+
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text(text=f'Выберите количество {features[feature]["text"]}:',
+                                                  reply_markup=keyboard)
+
+    logger.info("BOOKCASE_FEATURES_STATE")
+    return BOOKCASE_FEATURES_STATE
+
+
+async def save_bookcase_feature(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Saving selected value for the selected bookcase feature."""
+    callback = update.callback_query.data.split('-')
+    context.user_data[BOOKCASE_CREATE_UD][context.user_data[CURRENT_FEATURE_UD]] = int(callback[1])
+    return await create_bookcase_start(update, context)
+
+
+async def save_bookcase(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Creating a boockase in the database and displaying a message about the new active shelf."""
+    user = await sync_to_async(bot_logic.get_profile_user)(update.effective_chat.id)
+
+    bookcase_features = context.user_data[BOOKCASE_CREATE_UD]
+    bookcase = await sync_to_async(bot_logic.create_bookcase)(bookcase_features, user)
+    current_shelf = await sync_to_async(bot_logic.get_current_shelf)(update.effective_chat.id)
+
+    current_shelf_line = f'шкаф - {bookcase.title.lower()}, {current_shelf}'
+    text = f'Шкаф "{bookcase.title}" сохранен. Новая активная полка: {current_shelf_line}.'
+
+    buttons = [
+        [
+            InlineKeyboardButton(text="Назад", callback_data=str(END_CB)),
+        ],
+
+    ]
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
+
+    logger.info("SAVE_BOOKCASE_STATE")
+    return SAVE_BOOKCASE_STATE
 
 
 class Command(BaseCommand):
     help = 'Telegram bot'
 
     def handle(self, *args, **options):
-        request = Request(connect_timeout=0.5, read_timeout=1.0, )
-        bot = Bot(request=request, token=os.environ.get('TELEGRAM_TOKEN'), )
-        bot.msg_for_edit = dict()
-        updater = Updater(bot=bot, use_context=True, )
+        """Run the bot."""
 
-        message_handler_voice = MessageHandler(Filters.voice, answer)
-        message_handler_photo = MessageHandler(Filters.photo, answer)
-        message_handler_text = MessageHandler(Filters.text, answer)
+        application = Application.builder().token(os.environ.get('TELEGRAM_TOKEN')).build()
 
-        help_handler = CommandHandler("help", help_msg)
+        book_info_handlers = [
+            CallbackQueryHandler(swap_favorite_handler, pattern="^" + str(FAV_CB) + "$"),
+            CallbackQueryHandler(swap_read_handler, pattern="^" + str(READ_CB) + "$"),
+            CallbackQueryHandler(book_delete_handler, pattern="^" + str(BOOK_DELETE_CB) + "$"),
+        ]
 
-        buttons_handler = CallbackQueryHandler(callback=keyboard_callback_handler, pass_chat_data=True)
+        search_conv = ConversationHandler(
+            entry_points=[
+                CallbackQueryHandler(search_ask_request, pattern="^" + str(SEARCH_REQUEST_CB) + "$"),
+            ],
+            states={
+                SEARCH_STATE: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, search),
+                    MessageHandler(filters.VOICE, search)
+                ],
+                SEARCH_CHOICE_STATE: [
+                    CallbackQueryHandler(show_book_info, pattern="^" + str(BOOK_INFO_CB) + "-[0-9]+$"),
+                ],
+                SEARCH_RESPONSE_STATE: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, search),
+                ],
+            },
+            fallbacks=[
+                CallbackQueryHandler(show_book_info, pattern="^" + str(BOOK_INFO_CB) + "$"),
+                CallbackQueryHandler(start, pattern="^" + str(END_CB) + "$"),
+                CommandHandler("stop", stop_nested),
+            ],
+            map_to_parent={
+                BOOK_INFO_STATE: BOOK_INFO_STATE,
+                END_CB: SELECTING_ACTION_STATE,
+                STOPPING_STATE: STOPPING_STATE,
+                SELECTING_ACTION_STATE: SELECTING_ACTION_STATE,
+            },
+        )
 
-        updater.dispatcher.add_handler(message_handler_voice)
-        updater.dispatcher.add_handler(message_handler_photo)
-        updater.dispatcher.add_handler(message_handler_text)
-        updater.dispatcher.add_handler(buttons_handler)
-        updater.dispatcher.add_handler(help_handler)
+        selection_handlers = [
+            search_conv,
+            CallbackQueryHandler(show_book_info, pattern="^" + str(BOOK_INFO_CB) + "$"),
+            CallbackQueryHandler(show_profile_info, pattern="^" + str(PROFILE_INFO_CB) + "$"),
+            CallbackQueryHandler(show_profile_info, pattern="^" + str(SEARCH_REQUEST_CB) + "$"),
+            CallbackQueryHandler(select_bookcase, pattern="^" + str(SELECT_BOOKCASE_CB) + "$"),
+            CallbackQueryHandler(add_books_start, pattern="^" + str(ADD_BOOKS_START_CB) + "$"),
+            CallbackQueryHandler(create_bookcase_start, pattern="^" + str(ADD_BOOKCASE_CB) + "$"),
+        ]
 
-        updater.start_polling()
-        updater.idle()
+        conv_handler = ConversationHandler(
+            entry_points=[
+                CommandHandler("start", start),
+                CallbackQueryHandler(start, pattern="^" + str(REGISTER_DONE_CB) + "$")
+            ],
+            states={
+                SELECTING_ACTION_STATE: selection_handlers,
+                BOOK_INFO_STATE: book_info_handlers,
+                PROFILE_STATE: [
+                    search_conv,
+                    CallbackQueryHandler(show_book_info, pattern="^" + str(BOOK_INFO_CB) + "$"),
+                ],
+                SELECT_BOOKCASE_STATE: [
+                    CallbackQueryHandler(select_shelf, pattern="^" + str(BOOKCASE_CB) + "-[0-9]+$"),
+                    CallbackQueryHandler(start, pattern="^" + str(END_CB) + "$"),
+                ],
+                CHANGE_ACTIVE_SHELF_STATE: [
+                    CallbackQueryHandler(change_active_shelf, pattern="^" + str(CHANGE_ACTIVE_SHELF_CB) + "-[0-9]+$"),
+                ],
+                ADD_BOOKS_START_STATE: [
+                    MessageHandler(filters.PHOTO, add_books),
+                    MessageHandler(filters.TEXT, add_books),
+                ],
+                ADD_BOOKS_STATE: [
+                    MessageHandler(filters.PHOTO, add_books),
+                    MessageHandler(filters.TEXT, add_books),
+                    CallbackQueryHandler(create_found_books, pattern="^" + str(ADD_BOOKS_DONE_CB) + "$"),
+                ],
+                ADD_BOOKS_FINAL_STATE: [
+                    CallbackQueryHandler(show_book_info, pattern="^" + str(BOOK_INFO_CB) + "-[0-9]+$"),
+                ],
+                ADD_BOOKCASE_STATE: [
+                    CallbackQueryHandler(new_bookcase_title, pattern="^" + str(NEW_BOOKCASE_TITLE_CB) + "$"),
+                    CallbackQueryHandler(save_bookcase, pattern="^" + str(BOOKCASE_SAVE_CB) + "$"),
+                    CallbackQueryHandler(new_bookcase_feature, pattern="^" + str(NEW_BOOKCASE_FEATURE_CB) + "-[0-2]+$"),
+
+                ],
+                TYPING: [
+                    MessageHandler(filters.TEXT, save_bookcase_title),
+                    CallbackQueryHandler(create_bookcase_start, pattern="^" + str(END_CB) + "$"),
+                ],
+                BOOKCASE_FEATURES_STATE: [
+                    CallbackQueryHandler(create_bookcase_start, pattern="^" + str(END_CB) + "$"),
+                    CallbackQueryHandler(save_bookcase_feature, pattern="^" + str(SHELF_COUNT_CB) + "-[0-9]|10+$"),
+                    CallbackQueryHandler(save_bookcase_feature, pattern="^" + str(ROW_COUNT_CB) + "-[0-4]+$"),
+                    CallbackQueryHandler(save_bookcase_feature, pattern="^" + str(SECTIONS_COUNT_CB) + "-[0-2]+$"),
+                ],
+                SAVE_BOOKCASE_STATE: [],
+                STOPPING_STATE: [
+                    CommandHandler("start", start)
+                ],
+
+            },
+            fallbacks=[
+                CommandHandler("stop", stop),
+                CallbackQueryHandler(start, pattern="^" + str(END_CB) + "$"),
+            ],
+        )
+
+        application.add_handler(conv_handler)
+        application.run_polling()

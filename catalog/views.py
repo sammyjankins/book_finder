@@ -223,10 +223,6 @@ class BookcaseDeleteView(UserPassesTestMixin, DeleteView):
     def test_func(self):
         return logic.check_owership(self)
 
-    def post(self, request, *args, **kwargs):
-        logic.change_active_shelf(request, **kwargs)
-        return super(BookcaseDeleteView, self).post(request, **kwargs)
-
 
 class AuthorDeleteView(UserPassesTestMixin, DeleteView):
     model = Author
@@ -242,10 +238,6 @@ class BookDeleteView(UserPassesTestMixin, DeleteView):
 
     def test_func(self):
         return logic.check_owership(self)
-
-    def post(self, request, *args, **kwargs):
-        logic.last_book_delete(request, **kwargs)
-        return super(BookDeleteView, self).post(request, **kwargs)
 
 
 class NoteDeleteView(UserPassesTestMixin, DeleteView):

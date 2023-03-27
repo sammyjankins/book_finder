@@ -8,7 +8,6 @@ from pyzbar.pyzbar import decode as p_decode
 
 from catalog.models import Shelf, BookCase, Author, Book
 from catalog.parser import GoogleRequestSearch
-from users.models import Profile
 
 shelf_titles = {
     1: 'Первая',
@@ -75,16 +74,13 @@ def check_author(request):
 
 
 def new_active_shelf(user=None, kwargs=None):
-    active_shelves = Shelf.objects.filter(is_current=True, owner=user)
-    for shelf in active_shelves:
-        shelf.is_current = False
-        shelf.save()
-    if kwargs:
-        new_active = Shelf.objects.get(pk=kwargs['pk'])
-    else:
-        new_active = Shelf.objects.last()
+    active_shelf = Shelf.objects.filter(is_current=True, owner=user).first()
+    active_shelf.is_current = False
+    active_shelf.save()
+    new_active = Shelf.objects.get(pk=kwargs['pk']) if kwargs else Shelf.objects.last()
     new_active.is_current = True
     new_active.save()
+    return new_active
 
 
 def create_shelves(bookcase):
@@ -150,14 +146,14 @@ def get_queryset_for_book_update(request, current_object, original_context):
 
 def get_shelves_ajax(request):
     bookcase_id = request.POST['bookcase_id']
+
     try:
         bookcase = BookCase.objects.get(id=bookcase_id)
         shelves = bookcase.shelves
     except Exception as e:
-        print(e)
-        data = dict()
-        data['error_message'] = 'error'
+        data = {'error_message': f'error: {e}'}
         return JsonResponse(data)
+
     return JsonResponse(list(shelves.values('id', 'title', 'row')), safe=False)
 
 
@@ -261,13 +257,6 @@ def swap_read(kwargs):
     book = Book.objects.get(pk=kwargs['pk'])
     book.read = False if book.read else True
     book.save()
-
-
-def last_book_delete(request, **kwargs):
-    profile = Profile.objects.get(user=request.user)
-    if profile.last_book.pk == kwargs['pk']:
-        profile.last_book = Book.objects.filter(owner=request.user).exclude(pk=profile.last_book.pk).last()
-        profile.save()
 
 
 def change_active_shelf(request, **kwargs):
