@@ -55,7 +55,7 @@ def check_profile(func):
                 [
                     InlineKeyboardButton(text="Регистрация", url='https://www.bookfinder.space/register/'),
                     InlineKeyboardButton(text="Привязать Telegram",
-                                         url=f'{os.environ.get("MY_CURRENT_URL")}bind_tele_id/{chat_id}/'),
+                                         url=f'{os.environ.get("MY_DOMAIN")}bind_tele_id/{chat_id}/'),
                     InlineKeyboardButton(text="Готово", callback_data=str(bc.REGISTER_DONE_CB)),
                 ],
             ]
