@@ -54,6 +54,8 @@ def check_profile(func):
             buttons = [
                 [
                     InlineKeyboardButton(text="Регистрация", url='https://www.bookfinder.space/register/'),
+                    InlineKeyboardButton(text="Привязать Telegram",
+                                         url=f'{os.environ.get("MY_CURRENT_URL")}bind_tele_id/{chat_id}/'),
                     InlineKeyboardButton(text="Готово", callback_data=str(bc.REGISTER_DONE_CB)),
                 ],
             ]
@@ -128,7 +130,8 @@ def check_books(func):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
     """Register tele id of select action."""
     if not context.user_data.get(bc.NOT_FIRST_MSG_UD):
-        await update.message.reply_text("Привет! Я помогу быстро найти книгу в вашем шкафу или добавить новую.")
+        await context.bot.send_message(chat_id=update.effective_chat.id,
+                                       text="Привет! Я помогу быстро найти книгу в вашем шкафу или добавить новую.")
         context.user_data[bc.NOT_FIRST_MSG_UD] = True
 
     data_to_keep = {
