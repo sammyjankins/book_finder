@@ -77,6 +77,19 @@ def get_current_shelf(chat_id):
     return current_shelf
 
 
+def get_shelf(shelf_data, user):
+    if shelf_data.get('section_number'):
+        section_number = shelf_data.get('section_number')
+    else:
+        section_number = 1
+    shelf = Shelf.objects.filter(bookcase=shelf_data['bookcase_id'],
+                                 order_number=shelf_data['order_number'],
+                                 row_number=shelf_data['row_number'],
+                                 section_number=section_number,
+                                 owner=user).first()
+    return shelf
+
+
 def get_current_bookcase(current_shelf):
     return current_shelf.bookcase
 
@@ -197,5 +210,15 @@ def create_book(chat_id, data):
 
 def create_bookcase(data, user):
     bookcase = BookCase.objects.create(**data, owner=user)
-    services.create_shelves(bookcase)
     return bookcase
+
+
+def get_bookcase_detail(bookcase_id):
+    bookcase = BookCase.objects.get(pk=bookcase_id)
+    return {
+        'id': bookcase_id,
+        'title': bookcase.title,
+        'shelf_count': bookcase.shelf_count,
+        'row_count': bookcase.row_count,
+        'section_count': bookcase.section_count,
+    }

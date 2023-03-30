@@ -36,7 +36,25 @@ class Shelf(models.Model):
         ('Третий', 'Третий'),
         ('Четвертый', 'Четвертый'),
     )
+
+    ORDERS = (
+        ('Первая', 'Первый'),
+        ('Вторая', 'Вторая'),
+        ('Третья', 'Третья'),
+        ('Четвертая', 'Четвертая'),
+        ('Пятая', 'Пятая'),
+        ('Шестая', 'Шестая'),
+        ('Седьмая', 'Седьмая'),
+        ('Восьмая', 'Восьмая'),
+        ('Девятая', 'Девятая'),
+        ('Десятая', 'Десятая'),
+    )
     row = models.CharField(verbose_name='Ряд', max_length=100, choices=ROWS, default='')
+    order = models.CharField(verbose_name='Порядок', max_length=100, choices=ORDERS, default='')
+    row_number = models.IntegerField(verbose_name='Номер ряда', default=1)
+    order_number = models.IntegerField(verbose_name='Номер полки', default=1)
+    section_number = models.IntegerField(verbose_name='Номер секции', default=1)
+
     bookcase = models.ForeignKey(BookCase, verbose_name='Книжный шкаф', on_delete=models.CASCADE,
                                  related_name='shelves')
     is_current = models.BooleanField(verbose_name="Является текущей", default=False)

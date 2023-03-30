@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 END_STATE = ConversationHandler.END
 
 NEW_LN = '\n'
+CHECK = '\u2705'
 
 # State definitions
 SEARCH_RESPONSE_STATE = 'SEARCH_RESPONSE_STATE'
@@ -48,6 +49,9 @@ ADD_BOOKCASE_STATE = 'ADD_BOOKCASE_STATE'
 TYPING = 'TYPING'
 BOOKCASE_FEATURES_STATE = 'BOOKCASE_FEATURES_STATE'
 SAVE_BOOKCASE_STATE = 'SAVE_BOOKCASE_STATE'
+SELECT_SHELF_NUMBER_STATE = 'SELECT_SHELF_NUMBER_STATE'
+SELECT_SHELF_ROW_STATE = 'SELECT_SHELF_ROW_STATE'
+SELECT_SHELF_SECTION_STATE = 'SELECT_SHELF_SECTION_STATE'
 
 # User_data keys
 
@@ -61,6 +65,9 @@ ADD_BOOKS_UD = 'ADD_BOOKS_UD'
 BOOKS_MSG_UD = 'BOOKS_MSG_UD'
 BOOKCASE_CREATE_UD = 'BOOKCASE_CREATE_UD'
 CURRENT_FEATURE_UD = 'CURRENT_FEATURE_UD'
+CURRENT_SHELF_UD = 'CURRENT_SHELF_UD'
+SELECTED_SHELF_UD = 'SELECTED_SHELF_UD'
+SELECTED_BOOKCASE_UD = 'SELECTED_BOOKCASE_UD'
 
 # Callback constants
 
@@ -84,6 +91,9 @@ SHELF_COUNT_CB = 'SHELF_COUNT_CB'
 ROW_COUNT_CB = 'ROW_COUNT_CB'
 SECTIONS_COUNT_CB = 'SECTIONS_COUNT_CB'
 BOOKCASE_SAVE_CB = 'BOOKCASE_SAVE_CB'
+SELECT_SHELF_ORDER_CB = 'SELECT_SHELF_ORDER_CB'
+SELECT_SHELF_ROW_CB = 'SELECT_SHELF_ROW_CB'
+SELECT_SHELF_SECTION_CB = 'SELECT_SHELF_SECTION_CB'
 
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -371,12 +381,19 @@ async def select_bookcase(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     current_bookcase = await sync_to_async(bot_logic.get_current_bookcase)(current_shelf)
     bookcase_dict = await sync_to_async(bot_logic.get_bookcase_list)(update.effective_chat.id)
 
+    context.user_data[CURRENT_SHELF_UD] = {
+        'bookcase': current_bookcase.id,
+        'section_number': current_shelf.section_number,
+        'order_number': current_shelf.order_number,
+        'row_number': current_shelf.row_number,
+    }
+
     current_shelf_line = f'шкаф - {current_bookcase.title.lower()}, {current_shelf}'
     text = ("При добавлении через бота книги попадают на полку: "
             f"{current_shelf_line}. Для выбора другой полки выберите шкаф: ")
 
-    buttons = [InlineKeyboardButton(title,
-                                    callback_data=f"{BOOKCASE_CB}-{bookcase_id}")
+    buttons = [InlineKeyboardButton(f'{title} {CHECK if bookcase_id == current_bookcase.id else ""}',
+                                    callback_data=f'{BOOKCASE_CB}-{bookcase_id}')
                for bookcase_id, title in bookcase_dict.items()]
     keyboard = [[button] for button in buttons]
     keyboard.append([InlineKeyboardButton(text="Назад", callback_data=str(END_CB))])
@@ -392,40 +409,135 @@ async def select_bookcase(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def select_shelf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
     """Display options for a new active shelf from the selected bookcase."""
-    check = '\u2705'
-    text = 'Выберите активную полку: '
 
     callback = update.callback_query.data.split('-')
+    bookcase_id = callback[-1]
 
-    if callback[0] == BOOKCASE_CB:
-        bookcase_id = callback[-1]
-        context.user_data[BOOKCASE_UD] = bookcase_id
+    context.user_data[SELECTED_SHELF_UD] = {
+        'bookcase_id': bookcase_id,
+    }
+
+    text = 'Выберите номер полки: '
+
+    context.user_data[SELECTED_BOOKCASE_UD] = await sync_to_async(bot_logic.get_bookcase_detail)(bookcase_id)
+    bookcase_data = context.user_data[SELECTED_BOOKCASE_UD]
+
+    print(bookcase_data)
+
+    if int(bookcase_data['id']) == context.user_data[CURRENT_SHELF_UD]['bookcase']:
+        buttons = [[InlineKeyboardButton(f'{services.shelf_titles[i]} '
+                                         f'{CHECK if i == context.user_data[CURRENT_SHELF_UD]["order_number"] else ""}',
+                                         callback_data=f"{SELECT_SHELF_ORDER_CB}-{i}")]
+                   for i in range(1, bookcase_data['shelf_count'] + 1)]
     else:
-        bookcase_id = context.user_data.get(BOOKCASE_UD)
+        buttons = [[InlineKeyboardButton(f'{services.shelf_titles[i]}',
+                                         callback_data=f"{SELECT_SHELF_ORDER_CB}-{i}")]
+                   for i in range(1, bookcase_data['shelf_count'] + 1)]
 
-    shelf_dict = await sync_to_async(bot_logic.get_shelf_list)(update.effective_chat.id, bookcase_id)
+    buttons.append([InlineKeyboardButton(text="Назад", callback_data=str(END_CB))])
 
-    buttons = [InlineKeyboardButton(f'{shelf["title"]}, {shelf["row"]} ряд {check if shelf["is_current"] else ""}',
-                                    callback_data=f"{CHANGE_ACTIVE_SHELF_CB}-{shelf_id}")
-               for shelf_id, shelf in shelf_dict.items()]
-    keyboard = [[button] for button in buttons]
-    keyboard.append([InlineKeyboardButton(text="Назад", callback_data=str(END_CB))])
-
-    keyboard = InlineKeyboardMarkup(keyboard)
+    keyboard = InlineKeyboardMarkup(buttons)
 
     await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
 
-    logger.info("CHANGE_ACTIVE_SHELF_STATE")
-    return CHANGE_ACTIVE_SHELF_STATE
+    logger.info("SELECT_SHELF_NUMBER_STATE")
+    return SELECT_SHELF_NUMBER_STATE
+
+
+async def select_row(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Display options for a new active shelf from the selected bookcase."""
+
+    callback = update.callback_query.data.split('-')
+    order_number = callback[-1]
+
+    context.user_data[SELECTED_SHELF_UD]['order_number'] = order_number
+
+    text = 'Выберите номер ряда на полке: '
+
+    bookcase_data = context.user_data[SELECTED_BOOKCASE_UD]
+
+    if (int(bookcase_data['id']) == context.user_data[CURRENT_SHELF_UD]['bookcase'] and
+            int(context.user_data[SELECTED_SHELF_UD]['order_number']) == context.user_data[CURRENT_SHELF_UD][
+                'order_number']):
+        buttons = [[InlineKeyboardButton(f'{services.row_titles[i]} '
+                                         f'{CHECK if i == context.user_data[CURRENT_SHELF_UD]["row_number"] else ""}',
+                                         callback_data=f"{SELECT_SHELF_ROW_CB}-{i}")]
+                   for i in range(1, bookcase_data['row_count'] + 1)]
+    else:
+        buttons = [[InlineKeyboardButton(f'{services.row_titles[i]} ',
+                                         callback_data=f"{SELECT_SHELF_ROW_CB}-{i}")]
+                   for i in range(1, bookcase_data['row_count'] + 1)]
+
+    buttons.append([InlineKeyboardButton(text="Назад", callback_data=str(END_CB))])
+
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
+
+    logger.info("SELECT_SHELF_ROW_STATE")
+    return SELECT_SHELF_ROW_STATE
+
+
+async def select_section(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Display options for a new active shelf from the selected bookcase."""
+
+    callback = update.callback_query.data.split('-')
+    row_number = callback[-1]
+
+    context.user_data[SELECTED_SHELF_UD]['row_number'] = row_number
+
+    bookcase_data = context.user_data[SELECTED_BOOKCASE_UD]
+    if bookcase_data['section_count'] == 1:
+        return await change_active_shelf(update, context)
+
+    text = 'Выберите секцию на полке: '
+
+    if (int(bookcase_data['id']) == context.user_data[CURRENT_SHELF_UD]['bookcase'] and
+            int(context.user_data[SELECTED_SHELF_UD]['order_number']) == context.user_data[CURRENT_SHELF_UD][
+                'order_number']
+            and int(context.user_data[SELECTED_SHELF_UD]['row_number']) == context.user_data[CURRENT_SHELF_UD][
+                'row_number']):
+        buttons = [[InlineKeyboardButton(f'{services.sections_titles[i]} '
+                                         f'{CHECK if i == context.user_data[CURRENT_SHELF_UD]["section_number"] else ""}',
+                                         callback_data=f"{SELECT_SHELF_SECTION_CB}-{i}")]
+                   for i in range(1, bookcase_data['section_count'] + 1)]
+    else:
+        buttons = [[InlineKeyboardButton(f'{services.sections_titles[i]} ',
+                                         callback_data=f"{SELECT_SHELF_SECTION_CB}-{i}")]
+                   for i in range(1, bookcase_data['section_count'] + 1)]
+
+    buttons.append([InlineKeyboardButton(text="Назад", callback_data=str(END_CB))])
+
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
+
+    logger.info("SELECT_SHELF_SECTION_STATE")
+    return SELECT_SHELF_SECTION_STATE
 
 
 async def change_active_shelf(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
     """Saving information about the new active shelf."""
-    shelf_id = update.callback_query.data.split('-')[-1]
+
+    if SELECT_SHELF_SECTION_CB in update.callback_query.data:
+        section_number = update.callback_query.data.split('-')[-1]
+        context.user_data[SELECTED_SHELF_UD]['section_number'] = section_number
+
+    shelf_data = context.user_data[SELECTED_SHELF_UD]
     user = await sync_to_async(bot_logic.get_profile_user)(update.effective_chat.id)
-    await sync_to_async(services.new_active_shelf)(user=user, kwargs={'pk': shelf_id})
-    state = await select_shelf(update, context)
-    return state
+    shelf = await sync_to_async(bot_logic.get_shelf)(shelf_data, user)
+    await sync_to_async(services.new_active_shelf)(user=user, kwargs={'pk': shelf.id})
+
+    current_bookcase = await sync_to_async(bot_logic.get_bookcase_detail)(shelf_data['bookcase_id'])
+
+    current_shelf_line = f'шкаф - {current_bookcase["title"].lower()}, {shelf}'
+
+    text = f'Новая активная полка: {current_shelf_line}.'
+
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
+    context.user_data[START_OVER_UD] = False
+
+    return await start(update, context)
 
 
 async def add_books_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
@@ -670,8 +782,8 @@ async def save_bookcase(update: Update, context: ContextTypes.DEFAULT_TYPE) -> s
     await update.callback_query.answer()
     await update.callback_query.edit_message_text(text=text, reply_markup=keyboard)
 
-    logger.info("SAVE_BOOKCASE_STATE")
-    return SAVE_BOOKCASE_STATE
+    logger.info("SELECTING_ACTION_STATE")
+    return SELECTING_ACTION_STATE
 
 
 class Command(BaseCommand):
@@ -741,10 +853,15 @@ class Command(BaseCommand):
                 ],
                 SELECT_BOOKCASE_STATE: [
                     CallbackQueryHandler(select_shelf, pattern="^" + str(BOOKCASE_CB) + "-[0-9]+$"),
-                    CallbackQueryHandler(start, pattern="^" + str(END_CB) + "$"),
                 ],
-                CHANGE_ACTIVE_SHELF_STATE: [
-                    CallbackQueryHandler(change_active_shelf, pattern="^" + str(CHANGE_ACTIVE_SHELF_CB) + "-[0-9]+$"),
+                SELECT_SHELF_NUMBER_STATE: [
+                    CallbackQueryHandler(select_row, pattern="^" + str(SELECT_SHELF_ORDER_CB) + "-[0-9]+$"),
+                ],
+                SELECT_SHELF_ROW_STATE: [
+                    CallbackQueryHandler(select_section, pattern="^" + str(SELECT_SHELF_ROW_CB) + "-[0-9]+$"),
+                ],
+                SELECT_SHELF_SECTION_STATE: [
+                    CallbackQueryHandler(change_active_shelf, pattern="^" + str(SELECT_SHELF_SECTION_CB) + "-[0-9]+$"),
                 ],
                 ADD_BOOKS_START_STATE: [
                     MessageHandler(filters.PHOTO, add_books),
@@ -774,7 +891,6 @@ class Command(BaseCommand):
                     CallbackQueryHandler(save_bookcase_feature, pattern="^" + str(ROW_COUNT_CB) + "-[0-4]+$"),
                     CallbackQueryHandler(save_bookcase_feature, pattern="^" + str(SECTIONS_COUNT_CB) + "-[0-2]+$"),
                 ],
-                SAVE_BOOKCASE_STATE: [],
                 STOPPING_STATE: [
                     CommandHandler("start", start)
                 ],

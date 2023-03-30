@@ -75,8 +75,9 @@ def check_author(request):
 
 def new_active_shelf(user=None, kwargs=None):
     active_shelf = Shelf.objects.filter(is_current=True, owner=user).first()
-    active_shelf.is_current = False
-    active_shelf.save()
+    if active_shelf:
+        active_shelf.is_current = False
+        active_shelf.save()
     new_active = Shelf.objects.get(pk=kwargs['pk']) if kwargs else Shelf.objects.last()
     new_active.is_current = True
     new_active.save()
@@ -94,6 +95,10 @@ def create_shelves(bookcase):
                 Shelf.objects.create(
                     title=f'{shelf_titles[shelf_number + 1]} полка{section}',
                     row=row_titles[row_number + 1],
+                    row_number=row_number + 1,
+                    order=shelf_titles[shelf_number + 1],
+                    order_number=shelf_number + 1,
+                    section_number=sections_number + 1,
                     bookcase=bookcase,
                     owner=bookcase.owner)
     new_active_shelf(user=bookcase.owner)
