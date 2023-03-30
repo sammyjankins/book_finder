@@ -19,7 +19,7 @@ from telegram.ext import (
 )
 from django.core.management.base import BaseCommand
 
-import bot_constants as bc
+from catalog.management.commands import bot_constants as bc
 
 # Enable logging
 
