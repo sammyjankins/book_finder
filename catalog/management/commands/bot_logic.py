@@ -95,11 +95,7 @@ def get_current_bookcase(current_shelf):
 
 
 def get_profile_or_none(chat_id):
-    try:
-        profile = Profile.objects.get(tele_id=chat_id)
-        return profile
-    except Exception as e:
-        return None
+    return Profile.objects.filter(tele_id=chat_id).first()
 
 
 def delete_book(chat_id):
@@ -134,7 +130,7 @@ def book_to_answer(book_id):
     shelf = book.shelf.title
     row = book.shelf.row
     author = book.author.name
-    return [True, f'Книга - {book}, автор - {author}, шкаф: {bookcase}, {shelf}, {row} ряд']
+    return f'Книга - {book}, автор - {author}, шкаф: {bookcase}, {shelf}, {row} ряд'
 
 
 def process_search_query(chat_id, query):
@@ -222,3 +218,4 @@ def get_bookcase_detail(bookcase_id):
         'row_count': bookcase.row_count,
         'section_count': bookcase.section_count,
     }
+
